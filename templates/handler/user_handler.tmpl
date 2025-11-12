@@ -1,0 +1,92 @@
+package handler
+
+import (
+	{{- if eq .Framework "fiber"}}
+	"github.com/gofiber/fiber/v2"
+	{{- else if eq .Framework "gin"}}
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	{{- else if eq .Framework "echo"}}
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	{{- end}}
+	"strconv"
+
+	"{{.ModuleName}}/internal/usecase"
+)
+
+// UserHandler handles user HTTP requests
+type UserHandler struct {
+	userUsecase *usecase.UserUsecase
+}
+
+// NewUserHandler creates a new user handler
+func NewUserHandler(userUsecase *usecase.UserUsecase) *UserHandler {
+	return &UserHandler{
+		userUsecase: userUsecase,
+	}
+}
+
+{{- if eq .Framework "fiber"}}
+// GetUser handles GET /users/:id
+func (h *UserHandler) GetUser(c *fiber.Ctx) error {
+	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid user id",
+		})
+	}
+
+	user, err := h.userUsecase.GetUser(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(user)
+}
+{{- else if eq .Framework "gin"}}
+// GetUser handles GET /users/:id
+func (h *UserHandler) GetUser(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid user id",
+		})
+		return
+	}
+
+	user, err := h.userUsecase.GetUser(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+{{- else if eq .Framework "echo"}}
+// GetUser handles GET /users/:id
+func (h *UserHandler) GetUser(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error": "invalid user id",
+		})
+	}
+
+	user, err := h.userUsecase.GetUser(id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+{{- end}}
+

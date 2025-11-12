@@ -1,0 +1,84 @@
+package resty
+
+import (
+	"time"
+
+	"github.com/go-resty/resty/v2"
+)
+
+// Config holds Resty HTTP client configuration
+type Config struct {
+	BaseURL        string `json:"baseURL"`
+	Timeout        int    `json:"timeout"`        // Timeout in seconds
+	RetryCount     int    `json:"retryCount"`
+	RetryWaitTime  int    `json:"retryWaitTime"`  // Wait time between retries in seconds
+	Debug          bool   `json:"debug"`
+	ProxyURL       string `json:"proxyURL"`
+	FollowRedirect bool   `json:"followRedirect"`
+}
+
+// Client wraps the Resty HTTP client
+type Client struct {
+	client *resty.Client
+}
+
+// New creates a new Resty HTTP client
+func New(cfg Config) *Client {
+	client := resty.New()
+
+	// Set base URL
+	if cfg.BaseURL != "" {
+		client.SetBaseURL(cfg.BaseURL)
+	}
+
+	// Set timeout
+	if cfg.Timeout > 0 {
+		client.SetTimeout(time.Duration(cfg.Timeout) * time.Second)
+	} else {
+		client.SetTimeout(30 * time.Second)
+	}
+
+	// Set retry
+	if cfg.RetryCount > 0 {
+		client.SetRetryCount(cfg.RetryCount)
+		if cfg.RetryWaitTime > 0 {
+			client.SetRetryWaitTime(time.Duration(cfg.RetryWaitTime) * time.Second)
+		} else {
+			client.SetRetryWaitTime(1 * time.Second)
+		}
+	}
+
+	// Set debug
+	if cfg.Debug {
+		client.SetDebug(true)
+	}
+
+	// Set proxy
+	if cfg.ProxyURL != "" {
+		client.SetProxy(cfg.ProxyURL)
+	}
+
+	// Set redirect policy
+	if !cfg.FollowRedirect {
+		client.SetRedirectPolicy(resty.NoRedirectPolicy())
+	} else {
+		client.SetRedirectPolicy(resty.FlexibleRedirectPolicy(10))
+	}
+
+	// Set default headers
+	client.SetHeader("Content-Type", "application/json")
+	client.SetHeader("Accept", "application/json")
+
+	return &Client{client: client}
+}
+
+// Client returns the underlying Resty client for direct access
+func (c *Client) Client() *resty.Client {
+	return c.client
+}
+
+// Close closes the HTTP client (no-op for resty, but included for consistency)
+func (c *Client) Close() error {
+	return nil
+}
+

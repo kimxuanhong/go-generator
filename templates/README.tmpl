@@ -1,0 +1,555 @@
+# {{.ProjectName}}
+
+A Go project generated using the Go Project Generator with clean architecture principles.
+
+## Project Structure
+
+```
+.
+├── cmd/                          # Entry point
+│   └── main.go                   # Application entry
+├── internal/
+│   ├── app/                      # Application server & routing
+│   │   ├── server.go             # Server setup
+│   │   ├── routes.go             # Route registration
+│   │   └── bootstrap.go          # Dependency initialization
+│   ├── deps/                     # Dependency management
+│   │   ├── deps.go               # Dependency container
+│   │   └── config.go             # Configuration loading
+{{- if .IncludeExample}}
+│   ├── domain/                   # Domain entities
+│   │   └── entity.go             # Business models
+│   ├── usecase/                  # Business logic
+│   │   └── user_usecase.go       # User use cases
+│   ├── repository/               # Data access
+│   │   ├── user_repository.go    # User data operations
+│   │   └── cache_repository.go   # Cache operations
+│   ├── handler/                  # HTTP handlers
+│   │   └── user_handler.go       # User HTTP endpoints
+{{- if index .Includes "cron"}}
+│   └── jobs/                     # Background jobs
+│       └── example_job.go        # Example cron job
+{{- end}}
+{{- end}}
+│   └── infrastructure/           # External services
+{{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "logrus") (index .Includes "resty") (index .Includes "gorm") (index .Includes "mapstructure") (index .Includes "validator") (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq") (index .Includes "cron") (index .Includes "opentelemetry") }}
+│       - Integrations:
+{{- if index .Includes "postgres"}}
+│         • postgres/              (PostgreSQL setup)
+{{- end}}
+{{- if index .Includes "mysql"}}
+│         • mysql/                 (MySQL setup)
+{{- end}}
+{{- if index .Includes "redis"}}
+│         • redis/                 (Redis setup)
+{{- end}}
+{{- if index .Includes "logrus"}}
+│         • logrus/                (Logging setup)
+{{- end}}
+{{- if index .Includes "resty"}}
+│         • resty/                 (HTTP client setup)
+{{- end}}
+{{- if index .Includes "gorm"}}
+│         • gorm/                  (Generic GORM helpers)
+{{- end}}
+{{- if index .Includes "mapstructure"}}
+│         • mapstructure/          (Mapstructure decoder helpers)
+{{- end}}
+{{- if index .Includes "validator"}}
+│         • validator/             (Request validation helpers)
+{{- end}}
+{{- if index .Includes "rabbitmq"}}
+│         • rabbitmq/              (RabbitMQ setup)
+{{- end}}
+{{- if index .Includes "kafka"}}
+│         • kafka/                 (Kafka producer/consumer setup)
+{{- end}}
+{{- if index .Includes "activemq"}}
+│         • activemq/              (ActiveMQ STOMP setup)
+{{- end}}
+{{- if index .Includes "cron"}}
+│         • cron/                  (Cron scheduler setup)
+{{- end}}
+{{- if index .Includes "opentelemetry"}}
+│         • opentelemetry/         (OpenTelemetry tracing)
+{{- end}}
+{{- end}}
+├── config/
+│   └── config.json               # Configuration file
+├── Dockerfile                    # Docker image definition
+├── .env.example                  # Environment variables example
+├── .gitignore                    # Git ignore rules
+├── go.mod                        # Go module definition
+├── go.sum                        # Dependency checksums
+└── README.md                     # This file
+```
+
+## Prerequisites
+
+- Go 1.20+
+{{- if index .Includes "postgres"}}
+- PostgreSQL
+{{- end}}
+{{- if index .Includes "mysql"}}
+- MySQL
+{{- end}}
+{{- if index .Includes "redis"}}
+- Redis
+{{- end}}
+{{- if index .Includes "rabbitmq"}}
+- RabbitMQ
+{{- end}}
+{{- if index .Includes "kafka"}}
+- Kafka broker (e.g., Apache Kafka 3.x)
+{{- end}}
+{{- if index .Includes "activemq"}}
+- ActiveMQ / ActiveMQ Artemis (STOMP endpoint)
+{{- end}}
+{{- if index .Includes "opentelemetry"}}
+- OTLP collector/endpoint (optional, for tracing export)
+{{- end}}
+
+## Setup
+
+### 1. Install Dependencies
+
+```bash
+go mod download
+go mod tidy
+```
+
+### 2. Configuration
+
+Copy `.env.example` to `.env` and update with your values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `config/config.json` for default values. Environment variables will override config file values.
+
+{{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "rabbitmq")}}
+### 3. Start Services (Docker Compose)
+
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+{{- if index .Includes "postgres"}}
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: example
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+{{- end}}
+{{- if index .Includes "mysql"}}
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: example
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+{{- end}}
+{{- if index .Includes "redis"}}
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+{{- end}}
+{{- if index .Includes "rabbitmq"}}
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+{{- end}}
+{{- if index .Includes "kafka"}}
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnami/kafka:3.7
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    ports:
+      - "9092:9092"
+
+{{- end}}
+{{- if index .Includes "activemq"}}
+  activemq:
+    image: rmohr/activemq:5.17.6
+    ports:
+      - "61613:61613"   # STOMP
+      - "8161:8161"     # Admin UI
+
+{{- end}}
+
+volumes:
+{{- if index .Includes "postgres"}}
+  postgres_data:
+{{- end}}
+{{- if index .Includes "mysql"}}
+  mysql_data:
+{{- end}}
+{{- if index .Includes "redis"}}
+  redis_data:
+{{- end}}
+{{- if index .Includes "rabbitmq"}}
+  rabbitmq_data:
+{{- end}}
+{{- if index .Includes "kafka"}}
+  kafka_data:
+{{- end}}
+```
+
+Start services:
+
+```bash
+docker-compose up -d
+```
+
+{{- end}}
+## Running
+
+### Development
+
+```bash
+go run cmd/main.go
+```
+
+The server will start on the configured port (default: 8080).
+
+### With Custom Configuration
+
+```bash
+# Using environment variables
+ECHO_PORT=3000 POSTGRES_DSN="your-dsn" go run cmd/main.go
+
+# Or set in .env file and source it
+source .env
+go run cmd/main.go
+```
+
+### Build for Production
+
+```bash
+go build -o {{.ProjectName}} cmd/main.go
+./{{.ProjectName}}
+```
+
+### Docker
+
+Build the image:
+
+```bash
+docker build -t {{.ProjectName}}:latest .
+```
+
+Run the container:
+
+```bash
+docker run -d \
+  --name {{.ProjectName}} \
+  -p 8080:8080 \
+  -e ECHO_PORT=8080 \
+  {{- if index .Includes "postgres"}}
+  -e POSTGRES_DSN="postgres://user:pass@postgres:5432/db" \
+  {{- end}}
+  {{.ProjectName}}:latest
+```
+
+## API Endpoints
+
+{{- if .IncludeExample}}
+
+### Health Check
+
+```bash
+curl http://localhost:8080/health
+```
+
+Response:
+```json
+{
+  "status": "ok"
+}
+```
+
+### Get User
+
+```bash
+curl http://localhost:8080/api/v1/users/1
+```
+
+Response:
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "email": "john@example.com"
+}
+```
+
+{{- end}}
+
+## Configuration
+
+Configuration is loaded from `config/config.json` and can be overridden by environment variables.
+
+### Environment Variables
+
+See `.env.example` for all available configuration options.
+
+Common variables:
+- `{{if eq .Framework "echo"}}ECHO_HOST`, `ECHO_PORT{{else if eq .Framework "gin"}}GIN_HOST`, `GIN_PORT`, `GIN_MODE{{else if eq .Framework "fiber"}}FIBER_HOST`, `FIBER_PORT{{end}}`
+{{- if index .Includes "postgres"}}
+- `POSTGRES_DSN` - PostgreSQL connection string
+{{- end}}
+{{- if index .Includes "mysql"}}
+- `MYSQL_DSN` - MySQL connection string
+{{- end}}
+{{- if index .Includes "redis"}}
+- `REDIS_ADDR` - Redis address (host:port)
+{{- end}}
+{{- if index .Includes "rabbitmq"}}
+- `RABBITMQ_URL` - RabbitMQ connection URL
+{{- end}}
+{{- if index .Includes "kafka"}}
+- `KAFKA_BROKERS`, `KAFKA_TOPIC`, `KAFKA_GROUPID`, `KAFKA_BALANCER`
+{{- end}}
+{{- if index .Includes "activemq"}}
+- `ACTIVEMQ_ADDR`, `ACTIVEMQ_LOGIN`, `ACTIVEMQ_PASSCODE`
+{{- end}}
+{{- if index .Includes "gorm"}}
+- `GORM_DRIVER`, `GORM_DSN`, `GORM_LOGGERLEVEL`, `GORM_SKIPDEFAULTTRANSACTION`
+{{- end}}
+{{- if index .Includes "opentelemetry"}}
+- `OPENTELEMETRY_SERVICENAME`, `OPENTELEMETRY_ENDPOINT`, `OPENTELEMETRY_INSECURE`, `OPENTELEMETRY_SAMPLERATIO`
+{{- end}}
+
+> **Tip:** Nested keys from `config/config.json` are automatically mapped to environment variables by converting dots to underscores (e.g. `redis.addr` → `REDIS_ADDR`).
+
+## Architecture
+
+This project follows **Clean Architecture** principles:
+
+- **Domain**: Business logic and entities
+- **Usecase**: Application-specific business rules
+- **Repository**: Data access abstraction
+- **Handler**: HTTP request/response handling
+- **Infrastructure**: External service integrations
+
+### Dependency Flow
+
+```
+HTTP Request → Handler → Usecase → Repository → Database
+                           ↓
+                       (Business Logic)
+```
+
+## Development
+
+### Adding a New Endpoint
+
+1. Add a method to `internal/adapter/handler/user_handler.go`
+2. Register the route in `internal/app/routes.go`
+3. Implement logic in `internal/usecase/user_usecase.go`
+4. Access data via `internal/repository/user_repository.go`
+
+Example:
+
+```go
+// In user_handler.go
+func (h *UserHandler) CreateUser(c echo.Context) error {
+    var req CreateUserRequest
+    if err := c.BindJSON(&req); err != nil {
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    
+    user, err := h.userUsecase.CreateUser(req.Name, req.Email)
+    if err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+    }
+    
+    return c.JSON(http.StatusCreated, user)
+}
+
+// In routes.go
+api.POST("/users", userHandler.CreateUser)
+```
+
+{{- if index .Includes "rabbitmq"}}
+### Using RabbitMQ
+
+```go
+// In your usecase or handler
+conn := d.RabbitMQ.Conn
+ch, err := d.RabbitMQ.Conn.Channel()
+if err != nil {
+    return err
+}
+defer ch.Close()
+
+// Declare a queue
+q, err := rabbitmq.DeclareQueue(ch, "my-queue", true)
+if err != nil {
+    return err
+}
+
+// Publish a message
+err = rabbitmq.Publish(ch, "my-queue", []byte(`{"data":"value"}`))
+
+// Consume messages
+msgs, err := rabbitmq.Consume(ch, "my-queue", false)
+for msg := range msgs {
+    // Process message
+    msg.Ack(false)
+}
+```
+
+{{- end}}
+{{- if index .Includes "cron"}}
+### Using Cron Jobs
+
+Jobs are initialized in `internal/app/bootstrap.go` and registered in `cmd/main.go`.
+
+Add a new job:
+
+```go
+// In internal/jobs/my_job.go
+type MyJob struct {
+    // dependencies
+}
+
+func (j *MyJob) Run() {
+    // Job logic
+}
+
+// In cmd/main.go
+_, err := d.Cron.AddJob("0 * * * *", &jobs.MyJob{})
+```
+
+{{- end}}
+{{- if index .Includes "kafka"}}
+### Using Kafka
+
+```go
+// Produce a message
+if d.Kafka != nil {
+    err := d.Kafka.Produce(context.Background(), []byte("key"), []byte(`{"event":"demo"}`))
+    if err != nil {
+        d.Log.Errorf("failed to produce kafka message: %v", err)
+    }
+}
+
+// Consume messages
+if d.Kafka != nil {
+    msg, err := d.Kafka.Reader.ReadMessage(ctx)
+    if err != nil {
+        return err
+    }
+    d.Log.Infof("received message: %s", string(msg.Value))
+}
+```
+{{- end}}
+
+{{- if index .Includes "activemq"}}
+### Using ActiveMQ (STOMP)
+
+```go
+if d.ActiveMQ != nil {
+    // Subscribe
+    sub, err := d.ActiveMQ.Conn.Subscribe("/queue/example", stomp.AckAuto)
+    if err != nil {
+        return err
+    }
+    defer sub.Unsubscribe()
+
+    // Send a message
+    err = d.ActiveMQ.Conn.Send("/queue/example", "application/json", []byte(`{"hello":"world"}`))
+    if err != nil {
+        return err
+    }
+}
+```
+{{- end}}
+
+## Testing
+
+Run tests:
+
+```bash
+go test ./...
+```
+
+With coverage:
+
+```bash
+go test -cover ./...
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+Change the port via environment variable:
+
+```bash
+{{- if eq .Framework "echo"}}
+ECHO_PORT=9000 go run cmd/main.go
+{{- else if eq .Framework "gin"}}
+GIN_PORT=9000 go run cmd/main.go
+{{- else if eq .Framework "fiber"}}
+FIBER_PORT=9000 go run cmd/main.go
+{{- end}}
+```
+
+### Database Connection Error
+
+Check your connection string in `config/config.json` or set via env var.
+
+### RabbitMQ Connection Error
+
+Ensure RabbitMQ is running and the URL is correct:
+
+```bash
+RABBITMQ_URL=amqp://guest:guest@localhost:5672/ go run cmd/main.go
+```
+
+## License
+
+MIT
+
+## Generated by
+
+Go Project Generator v1.0

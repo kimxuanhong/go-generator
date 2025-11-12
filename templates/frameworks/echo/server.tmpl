@@ -1,0 +1,42 @@
+package app
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"{{.ModuleName}}/internal/deps"
+)
+
+// Start starts the Echo HTTP server
+func Start(cfg *deps.Config) error {
+	if cfg.Echo == nil {
+		return fmt.Errorf("echo config is required")
+	}
+
+	e := echo.New()
+
+	// Set debug mode
+	e.Debug = cfg.Echo.Debug
+
+	// Health check endpoint
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"status": "ok",
+		})
+	})
+
+	// Root endpoint
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "{{ .ProjectName }} running (echo)!")
+	})
+
+	addr := cfg.Echo.GetAddr()
+	log.Printf("Starting Echo server on %s", addr)
+	if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("failed to start echo server: %w", err)
+	}
+	return nil
+}
+

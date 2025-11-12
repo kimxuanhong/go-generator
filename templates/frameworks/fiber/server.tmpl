@@ -1,0 +1,39 @@
+package app
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/gofiber/fiber/v2"
+	"{{.ModuleName}}/internal/deps"
+)
+
+// Start starts the Fiber HTTP server
+func Start(cfg *deps.Config) error {
+	if cfg.Fiber == nil {
+		return fmt.Errorf("fiber config is required")
+	}
+
+	app := fiber.New(fiber.Config{
+		Prefork: cfg.Fiber.Prefork,
+	})
+
+	// Health check endpoint
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status": "ok",
+		})
+	})
+
+	// Root endpoint
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("{{ .ProjectName }} running (fiber)!")
+	})
+
+	addr := cfg.Fiber.GetAddr()
+	log.Printf("Starting Fiber server on %s", addr)
+	if err := app.Listen(addr); err != nil {
+		return fmt.Errorf("failed to start fiber server: %w", err)
+	}
+	return nil
+}

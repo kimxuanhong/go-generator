@@ -1,0 +1,481 @@
+package deps
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/sirupsen/logrus"
+	{{- if index .Includes "redis"}}
+	"{{.ModuleName}}/internal/infrastructure/redis"
+	{{- end}}
+	{{- if index .Includes "postgres"}}
+	"{{.ModuleName}}/internal/infrastructure/postgres"
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	"{{.ModuleName}}/internal/infrastructure/mysql"
+	{{- end}}
+	{{- if index .Includes "logrus"}}
+	logrusWrapper "{{.ModuleName}}/internal/infrastructure/logrus"
+	{{- end}}
+	{{- if index .Includes "resty"}}
+	"{{.ModuleName}}/internal/infrastructure/resty"
+	{{- end}}
+	{{- if index .Includes "cron"}}
+	"{{.ModuleName}}/internal/infrastructure/cron"
+	{{- end}}
+	{{- if index .Includes "rabbitmq"}}
+	"{{.ModuleName}}/internal/infrastructure/rabbitmq"
+	{{- end}}
+	{{- if index .Includes "gorm"}}
+	gormcfg "{{.ModuleName}}/internal/infrastructure/gorm"
+	{{- end}}
+	{{- if index .Includes "mapstructure"}}
+	mapstructureinfra "{{.ModuleName}}/internal/infrastructure/mapstructure"
+	{{- end}}
+	{{- if index .Includes "validator"}}
+	validatorinfra "{{.ModuleName}}/internal/infrastructure/validator"
+	{{- end}}
+	{{- if index .Includes "opentelemetry"}}
+	otelinfra "{{.ModuleName}}/internal/infrastructure/opentelemetry"
+	{{- end}}
+	{{- if index .Includes "kafka"}}
+	kafkainfra "{{.ModuleName}}/internal/infrastructure/kafka"
+	{{- end}}
+	{{- if index .Includes "activemq"}}
+	activemqinfra "{{.ModuleName}}/internal/infrastructure/activemq"
+	{{- end}}
+)
+
+// Deps holds all application dependencies
+type Deps struct {
+	Log *logrus.Logger
+	{{- if index .Includes "redis"}}
+	Redis *redis.Client
+	{{- end}}
+	{{- if index .Includes "postgres"}}
+	DB *postgres.DB
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	DB *mysql.DB
+	{{- end}}
+	{{- if index .Includes "gorm"}}
+	Gorm *gormcfg.DB
+	{{- end}}
+	{{- if index .Includes "resty"}}
+	Resty *resty.Client
+	{{- end}}
+	{{- if index .Includes "cron"}}
+	Cron *cron.Scheduler
+	{{- end}}
+	{{- if index .Includes "rabbitmq"}}
+	RabbitMQ *rabbitmq.Connection
+	{{- end}}
+	{{- if index .Includes "kafka"}}
+	Kafka *kafkainfra.Client
+	{{- end}}
+	{{- if index .Includes "activemq"}}
+	ActiveMQ *activemqinfra.Client
+	{{- end}}
+	{{- if index .Includes "mapstructure"}}
+	Mapper *mapstructureinfra.DecoderFactory
+	{{- end}}
+	{{- if index .Includes "validator"}}
+	Validator *validatorinfra.Validator
+	{{- end}}
+	{{- if index .Includes "opentelemetry"}}
+	Tracer *otelinfra.Provider
+	{{- end}}
+}
+
+// InitDeps initializes all application dependencies
+func InitDeps(cfg *Config) (*Deps, error) {
+	d := &Deps{}
+
+	// Initialize logger
+	if err := initLogger(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init logger: %w", err)
+	}
+	
+	{{- if index .Includes "redis"}}
+	if err := initRedis(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init redis: %w", err)
+	}
+	{{- end}}
+	
+	{{- if index .Includes "postgres"}}
+	if err := initPostgres(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init postgres: %w", err)
+	}
+	{{- end}}
+	
+	{{- if index .Includes "mysql"}}
+	if err := initMySQL(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init mysql: %w", err)
+	}
+	{{- end}}
+
+	{{- if index .Includes "gorm"}}
+	if err := initGorm(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init gorm: %w", err)
+	}
+	{{- end}}
+	
+	{{- if index .Includes "resty"}}
+	if err := initResty(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init resty: %w", err)
+	}
+	{{- end}}
+	
+	{{- if index .Includes "cron"}}
+	if err := initCron(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init cron: %w", err)
+	}
+	{{- end}}
+	
+	{{- if index .Includes "rabbitmq"}}
+	if err := initRabbitMQ(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init rabbitmq: %w", err)
+	}
+	{{- end}}
+	{{- if index .Includes "kafka"}}
+	if err := initKafka(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init kafka: %w", err)
+	}
+	{{- end}}
+	{{- if index .Includes "activemq"}}
+	if err := initActiveMQ(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init activemq: %w", err)
+	}
+	{{- end}}
+
+	{{- if index .Includes "mapstructure"}}
+	if err := initMapstructure(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init mapstructure: %w", err)
+	}
+	{{- end}}
+
+	{{- if index .Includes "validator"}}
+	if err := initValidator(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init validator: %w", err)
+	}
+	{{- end}}
+
+	{{- if index .Includes "opentelemetry"}}
+	if err := initOpenTelemetry(d, cfg); err != nil {
+		return nil, fmt.Errorf("failed to init opentelemetry: %w", err)
+	}
+	{{- end}}
+	
+	return d, nil
+}
+
+// initLogger initializes the logger
+func initLogger(d *Deps, cfg *Config) error {
+	{{- if index .Includes "logrus"}}
+	if cfg.Logrus != nil {
+		logger := logrusWrapper.New(*cfg.Logrus)
+		d.Log = logger.Logger
+	} else {
+		// Fallback to default logrus
+		d.Log = logrus.New()
+		d.Log.SetFormatter(&logrus.JSONFormatter{})
+		d.Log.SetLevel(logrus.InfoLevel)
+		d.Log.SetOutput(os.Stdout)
+	}
+	{{- else}}
+	// Use default logrus logger
+	d.Log = logrus.New()
+	d.Log.SetFormatter(&logrus.JSONFormatter{})
+	d.Log.SetLevel(logrus.InfoLevel)
+	d.Log.SetOutput(os.Stdout)
+	{{- end}}
+	return nil
+}
+
+{{- if index .Includes "redis"}}
+// initRedis initializes the Redis client
+func initRedis(d *Deps, cfg *Config) error {
+	redisCfg := cfg.Redis
+	if redisCfg == nil {
+		return fmt.Errorf("redis config is required")
+	}
+	client := redis.New(*redisCfg)
+	if err := client.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping redis: %w", err)
+	}
+	d.Redis = client
+	d.Log.Info("Redis initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "postgres"}}
+// initPostgres initializes the PostgreSQL database connection
+func initPostgres(d *Deps, cfg *Config) error {
+	postgresCfg := cfg.Postgres
+	if postgresCfg == nil {
+		return fmt.Errorf("postgres config is required")
+	}
+	db, err := postgres.New(*postgresCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect postgres: %w", err)
+	}
+	if err := db.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping postgres: %w", err)
+	}
+	d.DB = db
+	d.Log.Info("Postgres initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "mysql"}}
+// initMySQL initializes the MySQL database connection
+func initMySQL(d *Deps, cfg *Config) error {
+	mysqlCfg := cfg.MySQL
+	if mysqlCfg == nil {
+		return fmt.Errorf("mysql config is required")
+	}
+	db, err := mysql.New(*mysqlCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect mysql: %w", err)
+	}
+	if err := db.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping mysql: %w", err)
+	}
+	d.DB = db
+	d.Log.Info("MySQL initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "resty"}}
+// initResty initializes the Resty HTTP client
+func initResty(d *Deps, cfg *Config) error {
+	restyCfg := cfg.Resty
+	if restyCfg == nil {
+		return fmt.Errorf("resty config is required")
+	}
+	client := resty.New(*restyCfg)
+	d.Resty = client
+	d.Log.Info("Resty initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "cron"}}
+// initCron initializes the Cron scheduler
+func initCron(d *Deps, cfg *Config) error {
+	cronCfg := cfg.Cron
+	if cronCfg == nil {
+		return fmt.Errorf("cron config is required")
+	}
+	scheduler, err := cron.New(*cronCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create cron scheduler: %w", err)
+	}
+	
+	// Start the scheduler
+	scheduler.Start()
+	
+	d.Cron = scheduler
+	d.Log.Info("Cron scheduler initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "rabbitmq"}}
+// initRabbitMQ initializes the RabbitMQ connection
+func initRabbitMQ(d *Deps, cfg *Config) error {
+	rabbitmqCfg := cfg.RabbitMQ
+	if rabbitmqCfg == nil {
+		return fmt.Errorf("rabbitmq config is required")
+	}
+	conn, err := rabbitmq.NewConnection(rabbitmqCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect to rabbitmq: %w", err)
+	}
+	d.RabbitMQ = &rabbitmq.Connection{Conn: conn}
+	d.Log.Info("RabbitMQ initialized successfully")
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "gorm"}}
+// initGorm initializes a generic GORM connection
+func initGorm(d *Deps, cfg *Config) error {
+	gormConfig := cfg.Gorm
+	if gormConfig == nil {
+		return fmt.Errorf("gorm config is required")
+	}
+	db, err := gormcfg.New(*gormConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect gorm: %w", err)
+	}
+	d.Gorm = db
+	if d.Log != nil {
+		d.Log.Info("GORM initialized successfully")
+	}
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "mapstructure"}}
+// initMapstructure initializes the decoder factory
+func initMapstructure(d *Deps, cfg *Config) error {
+	msConfig := cfg.Mapstructure
+	if msConfig == nil {
+		msConfig = &mapstructureinfra.Config{}
+	}
+	d.Mapper = mapstructureinfra.NewFactory(*msConfig)
+	if d.Log != nil {
+		d.Log.Info("Mapstructure decoder factory initialized")
+	}
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "validator"}}
+// initValidator initializes the validator instance
+func initValidator(d *Deps, cfg *Config) error {
+	valConfig := cfg.Validator
+	if valConfig == nil {
+		valConfig = &validatorinfra.Config{}
+	}
+	validator, err := validatorinfra.New(*valConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create validator: %w", err)
+	}
+	d.Validator = validator
+	if d.Log != nil {
+		d.Log.Info("Validator initialized successfully")
+	}
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "opentelemetry"}}
+// initOpenTelemetry initializes the OpenTelemetry provider
+func initOpenTelemetry(d *Deps, cfg *Config) error {
+	otelConfig := cfg.Opentelemetry
+	if otelConfig == nil {
+		return fmt.Errorf("opentelemetry config is required")
+	}
+	provider, err := otelinfra.New(context.Background(), *otelConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize opentelemetry: %w", err)
+	}
+	d.Tracer = provider
+	if d.Log != nil {
+		d.Log.Info("OpenTelemetry initialized successfully")
+	}
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "kafka"}}
+// initKafka initializes the Kafka client
+func initKafka(d *Deps, cfg *Config) error {
+	kCfg := cfg.Kafka
+	if kCfg == nil {
+		return fmt.Errorf("kafka config is required")
+	}
+	client, err := kafkainfra.New(*kCfg)
+	if err != nil {
+		return fmt.Errorf("failed to init kafka: %w", err)
+	}
+	d.Kafka = client
+	if d.Log != nil {
+		d.Log.Info("Kafka initialized successfully")
+	}
+	return nil
+}
+{{- end}}
+
+{{- if index .Includes "activemq"}}
+// initActiveMQ initializes the ActiveMQ client
+func initActiveMQ(d *Deps, cfg *Config) error {
+	aCfg := cfg.ActiveMQ
+	if aCfg == nil {
+		return fmt.Errorf("activemq config is required")
+	}
+	client, err := activemqinfra.New(*aCfg)
+	if err != nil {
+		return fmt.Errorf("failed to init activemq: %w", err)
+	}
+	d.ActiveMQ = client
+	if d.Log != nil {
+		d.Log.Info("ActiveMQ initialized successfully")
+	}
+	return nil
+}
+{{- end}}
+
+// Close closes all dependencies
+func (d *Deps) Close() error {
+	{{- if index .Includes "redis"}}
+	if d.Redis != nil {
+		if err := d.Redis.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if or (index .Includes "postgres") (index .Includes "mysql")}}
+	if d.DB != nil {
+		if err := d.DB.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "resty"}}
+	if d.Resty != nil {
+		if err := d.Resty.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "cron"}}
+	if d.Cron != nil {
+		if err := d.Cron.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "rabbitmq"}}
+	if d.RabbitMQ != nil {
+		if err := d.RabbitMQ.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "kafka"}}
+	if d.Kafka != nil {
+		if err := d.Kafka.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "activemq"}}
+	if d.ActiveMQ != nil {
+		if err := d.ActiveMQ.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "gorm"}}
+	if d.Gorm != nil {
+		if err := d.Gorm.Close(); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	{{- if index .Includes "opentelemetry"}}
+	if d.Tracer != nil {
+		if err := d.Tracer.Shutdown(context.Background()); err != nil {
+			return err
+		}
+	}
+	{{- end}}
+	return nil
+}

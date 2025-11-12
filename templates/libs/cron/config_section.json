@@ -1,0 +1,14 @@
+{
+  "cron": {
+    "location": "UTC",
+    "jobs": [
+      {
+        "name": "example-job",
+        "schedule": "0 */5 * * * *",
+        "description": "Example job that runs every 5 minutes",
+        "enabled": false
+      }
+    ]
+  }
+}
+

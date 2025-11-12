@@ -1,0 +1,90 @@
+package cron
+
+import (
+	"context"
+	"time"
+
+	"github.com/robfig/cron/v3"
+)
+
+// Config holds Cron scheduler configuration
+type Config struct {
+	Location string   `json:"location"` // Timezone location (e.g., "Asia/Ho_Chi_Minh", "UTC")
+	Jobs     []JobConfig `json:"jobs"`  // List of cron jobs
+}
+
+// JobConfig holds configuration for a single cron job
+type JobConfig struct {
+	Name        string `json:"name"`        // Job name
+	Schedule    string `json:"schedule"`    // Cron expression (e.g., "0 */5 * * * *")
+	Description string `json:"description"` // Job description
+	Enabled     bool   `json:"enabled"`     // Whether the job is enabled
+}
+
+// Scheduler wraps the cron scheduler
+type Scheduler struct {
+	cron *cron.Cron
+	jobs map[string]cron.EntryID
+}
+
+// New creates a new cron scheduler
+func New(cfg Config) (*Scheduler, error) {
+	// Parse location
+	location, err := time.LoadLocation(cfg.Location)
+	if err != nil {
+		location = time.UTC
+	}
+
+	// Create cron with location
+	c := cron.New(cron.WithLocation(location))
+
+	scheduler := &Scheduler{
+		cron: c,
+		jobs: make(map[string]cron.EntryID),
+	}
+
+	return scheduler, nil
+}
+
+// AddJob adds a job to the scheduler
+func (s *Scheduler) AddJob(spec string, cmd cron.Job) (cron.EntryID, error) {
+	return s.cron.AddJob(spec, cmd)
+}
+
+// AddFunc adds a function job to the scheduler
+func (s *Scheduler) AddFunc(spec string, cmd func()) (cron.EntryID, error) {
+	return s.cron.AddFunc(spec, cmd)
+}
+
+// Start starts the cron scheduler
+func (s *Scheduler) Start() {
+	s.cron.Start()
+}
+
+// Stop stops the cron scheduler
+func (s *Scheduler) Stop() context.Context {
+	return s.cron.Stop()
+}
+
+// Cron returns the underlying cron scheduler for direct access
+func (s *Scheduler) Cron() *cron.Cron {
+	return s.cron
+}
+
+// Remove removes a job from the scheduler
+func (s *Scheduler) Remove(id cron.EntryID) {
+	s.cron.Remove(id)
+}
+
+// Close stops the cron scheduler (alias for Stop for consistency)
+func (s *Scheduler) Close() error {
+	ctx := s.cron.Stop()
+	// Wait for running jobs to finish (with timeout)
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-time.After(30 * time.Second):
+		return nil
+	}
+}
+

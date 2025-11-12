@@ -1,0 +1,45 @@
+package app
+
+import (
+    {{- if eq .Framework "fiber"}}
+    "github.com/gofiber/fiber/v2"
+    {{- else if eq .Framework "gin"}}
+    "net/http"
+
+    "github.com/gin-gonic/gin"
+    {{- else if eq .Framework "echo"}}
+    "net/http"
+
+    "github.com/labstack/echo/v4"
+    {{- end}}
+    "{{.ModuleName}}/internal/adapter/handler"
+)
+
+// RegisterRoutes registers application routes and health checks
+func RegisterRoutes(s *Server, userHandler *handler.UserHandler) {
+    {{- if eq .Framework "fiber"}}
+    api := s.app.Group("/api/v1")
+    api.Get("/users/:id", userHandler.GetUser)
+
+    // Health check
+    s.app.Get("/health", func(c *fiber.Ctx) error {
+        return c.JSON(fiber.Map{"status": "ok"})
+    })
+    {{- else if eq .Framework "gin"}}
+    api := s.router.Group("/api/v1")
+    api.GET("/users/:id", userHandler.GetUser)
+
+    // Health check
+    s.router.GET("/health", func(c *gin.Context) {
+        c.JSON(http.StatusOK, gin.H{"status": "ok"})
+    })
+    {{- else if eq .Framework "echo"}}
+    api := s.echo.Group("/api/v1")
+    api.GET("/users/:id", userHandler.GetUser)
+
+    // Health check
+    s.echo.GET("/health", func(c echo.Context) error {
+        return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+    })
+    {{- end}}
+}

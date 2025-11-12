@@ -1,0 +1,50 @@
+package mapstructure
+
+import (
+	"github.com/mitchellh/mapstructure"
+)
+
+// Config holds defaults for decoder behaviour.
+type Config struct {
+	TagName             string `json:"tagName" mapstructure:"tagName"`
+	WeaklyTypedInput    bool   `json:"weaklyTypedInput" mapstructure:"weaklyTypedInput"`
+	IgnoreUntaggedFields bool  `json:"ignoreUntaggedFields" mapstructure:"ignoreUntaggedFields"`
+}
+
+// DecoderFactory creates configured mapstructure decoders on demand.
+type DecoderFactory struct {
+	config Config
+}
+
+// NewFactory returns a new DecoderFactory with the provided configuration.
+func NewFactory(cfg Config) *DecoderFactory {
+	return &DecoderFactory{config: cfg}
+}
+
+// Decode maps the input into result applying optional decode hook functions.
+func (f *DecoderFactory) Decode(input interface{}, result interface{}, hooks ...mapstructure.DecodeHookFunc) error {
+	config := &mapstructure.DecoderConfig{
+		Result:               result,
+		TagName:              f.tagName(),
+		WeaklyTypedInput:     f.config.WeaklyTypedInput,
+		IgnoreUntaggedFields: f.config.IgnoreUntaggedFields,
+	}
+
+	if len(hooks) > 0 {
+		config.DecodeHook = mapstructure.ComposeDecodeHookFunc(hooks...)
+	}
+
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		return err
+	}
+
+	return decoder.Decode(input)
+}
+
+func (f *DecoderFactory) tagName() string {
+	if f.config.TagName != "" {
+		return f.config.TagName
+	}
+	return "mapstructure"
+}

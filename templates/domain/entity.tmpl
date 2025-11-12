@@ -1,0 +1,24 @@
+package domain
+
+// User represents a user entity
+type User struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// UserRepository defines the interface for user data operations
+type UserRepository interface {
+	GetByID(id int64) (*User, error)
+	Create(user *User) error
+	Update(user *User) error
+	Delete(id int64) error
+}
+
+// CacheRepository defines the interface for cache operations
+type CacheRepository interface {
+	Get(key string) (string, error)
+	Set(key string, value string) error
+	Delete(key string) error
+}
+

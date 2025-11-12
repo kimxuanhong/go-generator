@@ -1,0 +1,43 @@
+package main
+
+import (
+	{{- if not (or (eq .Framework "fiber") (eq .Framework "gin") (eq .Framework "echo"))}}
+	"context"
+	{{- end}}
+	"log"
+
+	"{{.ModuleName}}/internal/app"
+	"{{.ModuleName}}/internal/deps"
+)
+
+func main() {
+	// Load configuration
+	cfg, err := deps.LoadConfig("config/config.json")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// Initialize dependencies
+	d, err := deps.InitDeps(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize dependencies: %v", err)
+	}
+	defer d.Close()
+
+	log.Println("All dependencies initialized successfully!")
+
+	// Create and start server
+	{{- if or (eq .Framework "fiber") (eq .Framework "gin") (eq .Framework "echo")}}
+	server, err := app.NewServer(d)
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	if err := server.Start(cfg); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+	{{- else}}
+	log.Println("No framework selected, keeping server alive...")
+	<-context.Background().Done()
+	{{- end}}
+}

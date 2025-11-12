@@ -1,0 +1,7 @@
+{
+  "mapstructure": {
+    "tagName": "mapstructure",
+    "weaklyTypedInput": true,
+    "ignoreUntaggedFields": false
+  }
+}

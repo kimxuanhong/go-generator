@@ -1,0 +1,17 @@
+package app
+
+import (
+    "{{.ModuleName}}/internal/deps"
+)
+
+// SetupDependencies initializes repositories, usecases, handlers and optional jobs.
+// BootstrapResult groups the initialized components returned by SetupDependencies.
+type BootstrapResult struct {
+}
+
+func SetupDependencies(d *deps.Deps) (*BootstrapResult, error) {
+    // Pack results into a single struct to simplify the generated API.
+    result := &BootstrapResult{
+    }
+    return result, nil
+}

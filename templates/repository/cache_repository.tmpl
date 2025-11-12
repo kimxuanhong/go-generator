@@ -1,0 +1,73 @@
+package repository
+
+import (
+	"fmt"
+	{{- if index .Includes "redis"}}
+	"context"
+	{{- end}}
+
+	"{{.ModuleName}}/internal/domain"
+	{{- if index .Includes "redis"}}
+	"{{.ModuleName}}/internal/infrastructure/redis"
+	{{- end}}
+)
+
+// CacheRepositoryImpl implements CacheRepository
+type CacheRepositoryImpl struct {
+	{{- if index .Includes "redis"}}
+	client *redis.Client
+	{{- end}}
+}
+
+// NewCacheRepository creates a new cache repository
+func NewCacheRepository({{- if index .Includes "redis"}}client *redis.Client{{- end}}) domain.CacheRepository {
+	return &CacheRepositoryImpl{
+		{{- if index .Includes "redis"}}
+		client: client,
+		{{- end}}
+	}
+}
+
+// Get retrieves a value from cache
+func (r *CacheRepositoryImpl) Get(key string) (string, error) {
+	{{- if index .Includes "redis"}}
+	ctx := context.Background()
+	client := r.client.Client()
+	val, err := client.Get(ctx, key).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get from cache: %w", err)
+	}
+	return val, nil
+	{{- else}}
+	return "", fmt.Errorf("cache not available")
+	{{- end}}
+}
+
+// Set sets a value in cache
+func (r *CacheRepositoryImpl) Set(key string, value string) error {
+	{{- if index .Includes "redis"}}
+	ctx := context.Background()
+	client := r.client.Client()
+	if err := client.Set(ctx, key, value, 0).Err(); err != nil {
+		return fmt.Errorf("failed to set cache: %w", err)
+	}
+	return nil
+	{{- else}}
+	return fmt.Errorf("cache not available")
+	{{- end}}
+}
+
+// Delete deletes a value from cache
+func (r *CacheRepositoryImpl) Delete(key string) error {
+	{{- if index .Includes "redis"}}
+	ctx := context.Background()
+	client := r.client.Client()
+	if err := client.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("failed to delete from cache: %w", err)
+	}
+	return nil
+	{{- else}}
+	return fmt.Errorf("cache not available")
+	{{- end}}
+}
+

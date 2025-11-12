@@ -1,0 +1,220 @@
+{
+  "libs": {
+    "redis": {
+      "imports": [
+        "github.com/redis/go-redis/v9"
+      ],
+      "config_section": "templates/libs/redis/config_section.json",
+      "templates": [
+        "templates/libs/redis/redis.tmpl"
+      ],
+      "category": "caching",
+      "display_name": "Redis",
+      "icon": "🔴",
+      "is_radio": false
+    },
+    "mysql": {
+      "imports": [
+        "gorm.io/driver/mysql",
+        "gorm.io/gorm"
+      ],
+      "config_section": "templates/libs/mysql/config_section.json",
+      "templates": [
+        "templates/libs/mysql/mysql.tmpl"
+      ],
+      "category": "database",
+      "display_name": "MySQL",
+      "icon": "🐬",
+      "is_radio": true
+    },
+    "postgres": {
+      "imports": [
+        "gorm.io/driver/postgres",
+        "gorm.io/gorm"
+      ],
+      "config_section": "templates/libs/postgres/config_section.json",
+      "templates": [
+        "templates/libs/postgres/postgres.tmpl"
+      ],
+      "category": "database",
+      "display_name": "PostgreSQL",
+      "icon": "🐘",
+      "is_radio": true
+    },
+    "gorm": {
+      "imports": [
+        "gorm.io/gorm",
+        "gorm.io/driver/postgres",
+        "gorm.io/driver/mysql",
+        "gorm.io/driver/sqlite"
+      ],
+      "config_section": "templates/libs/gorm/config_section.json",
+      "templates": [
+        "templates/libs/gorm/gorm.tmpl"
+      ],
+      "category": "database",
+      "display_name": "GORM",
+      "icon": "🗃️",
+      "is_radio": false
+    },
+    "logrus": {
+      "imports": [
+        "github.com/sirupsen/logrus"
+      ],
+      "config_section": "templates/libs/logrus/config_section.json",
+      "templates": [
+        "templates/libs/logrus/logrus.tmpl"
+      ],
+      "category": "utilities",
+      "display_name": "Logrus",
+      "icon": "📝",
+      "is_radio": false
+    },
+    "resty": {
+      "imports": [
+        "github.com/go-resty/resty/v2"
+      ],
+      "config_section": "templates/libs/resty/config_section.json",
+      "templates": [
+        "templates/libs/resty/resty.tmpl"
+      ],
+      "category": "utilities",
+      "display_name": "Resty",
+      "icon": "🌐",
+      "is_radio": false
+    },
+    "mapstructure": {
+      "imports": [
+        "github.com/mitchellh/mapstructure"
+      ],
+      "config_section": "templates/libs/mapstructure/config_section.json",
+      "templates": [
+        "templates/libs/mapstructure/mapstructure.tmpl"
+      ],
+      "category": "utilities",
+      "display_name": "Mapstructure",
+      "icon": "🧩",
+      "is_radio": false
+    },
+    "validator": {
+      "imports": [
+        "github.com/go-playground/validator/v10"
+      ],
+      "config_section": "templates/libs/validator/config_section.json",
+      "templates": [
+        "templates/libs/validator/validator.tmpl"
+      ],
+      "category": "utilities",
+      "display_name": "Validator",
+      "icon": "✅",
+      "is_radio": false
+    },
+    "cron": {
+      "imports": [
+        "github.com/robfig/cron/v3"
+      ],
+      "config_section": "templates/libs/cron/config_section.json",
+      "templates": [
+        "templates/libs/cron/cron.tmpl"
+      ],
+      "category": "utilities",
+      "display_name": "Cron",
+      "icon": "⏰",
+      "is_radio": false
+    },
+    "rabbitmq": {
+      "imports": [
+        "github.com/rabbitmq/amqp091-go"
+      ],
+      "config_section": "templates/libs/rabbitmq/config_section.json",
+      "templates": [
+        "templates/libs/rabbitmq/rabbitmq.tmpl"
+      ],
+      "category": "messaging",
+      "display_name": "RabbitMQ",
+      "icon": "🐰",
+      "is_radio": false
+    },
+    "kafka": {
+      "imports": [
+        "github.com/segmentio/kafka-go"
+      ],
+      "config_section": "templates/libs/kafka/config_section.json",
+      "templates": [
+        "templates/libs/kafka/kafka.tmpl"
+      ],
+      "category": "messaging",
+      "display_name": "Kafka",
+      "icon": "🟣",
+      "is_radio": false
+    },
+    "activemq": {
+      "imports": [
+        "github.com/go-stomp/stomp"
+      ],
+      "config_section": "templates/libs/activemq/config_section.json",
+      "templates": [
+        "templates/libs/activemq/activemq.tmpl"
+      ],
+      "category": "messaging",
+      "display_name": "ActiveMQ",
+      "icon": "📬",
+      "is_radio": false
+    },
+    "opentelemetry": {
+      "imports": [
+        "go.opentelemetry.io/otel",
+        "go.opentelemetry.io/otel/propagation",
+        "go.opentelemetry.io/otel/sdk/resource",
+        "go.opentelemetry.io/otel/sdk/trace",
+        "go.opentelemetry.io/otel/semconv/v1.17.0",
+        "go.opentelemetry.io/otel/trace",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+        "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+      ],
+      "config_section": "templates/libs/opentelemetry/config_section.json",
+      "templates": [
+        "templates/libs/opentelemetry/opentelemetry.tmpl"
+      ],
+      "category": "observability",
+      "display_name": "OpenTelemetry",
+      "icon": "📈",
+      "is_radio": false
+    }
+  },
+  "frameworks": {
+    "gin": {
+      "imports": [
+        "github.com/gin-gonic/gin"
+      ],
+      "config_section": "templates/frameworks/gin/config_section.json",
+      "templates": [
+        "templates/frameworks/gin/server.tmpl"
+      ],
+      "display_name": "Gin",
+      "icon": "🍸"
+    },
+    "fiber": {
+      "imports": [
+        "github.com/gofiber/fiber/v2"
+      ],
+      "config_section": "templates/frameworks/fiber/config_section.json",
+      "templates": [
+        "templates/frameworks/fiber/server.tmpl"
+      ],
+      "display_name": "Fiber",
+      "icon": "⚡"
+    },
+    "echo": {
+      "imports": [
+        "github.com/labstack/echo/v4"
+      ],
+      "config_section": "templates/frameworks/echo/config_section.json",
+      "templates": [
+        "templates/frameworks/echo/server.tmpl"
+      ],
+      "display_name": "Echo",
+      "icon": "🔊"
+    }
+  }
+}

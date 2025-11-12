@@ -1,0 +1,44 @@
+package redis
+
+import (
+	"context"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// Config holds Redis connection configuration
+type Config struct {
+	Addr     string `json:"addr"`
+	Password string `json:"password"`
+	DB       int    `json:"db"`
+}
+
+// Client wraps the Redis client
+type Client struct {
+	client *redis.Client
+}
+
+// New creates a new Redis client
+func New(cfg Config) *Client {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     cfg.Addr,
+		Password: cfg.Password,
+		DB:       cfg.DB,
+	})
+	return &Client{client: rdb}
+}
+
+// Client returns the underlying Redis client for direct access
+func (c *Client) Client() *redis.Client {
+	return c.client
+}
+
+// Ping checks the connection to Redis
+func (c *Client) Ping(ctx context.Context) error {
+	return c.client.Ping(ctx).Err()
+}
+
+// Close closes the Redis connection
+func (c *Client) Close() error {
+	return c.client.Close()
+}

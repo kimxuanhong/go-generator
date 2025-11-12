@@ -1,0 +1,114 @@
+package app
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+
+	{{- if eq .Framework "fiber"}}
+	"github.com/gofiber/fiber/v2"
+	{{- else if eq .Framework "gin"}}
+	"github.com/gin-gonic/gin"
+	{{- else if eq .Framework "echo"}}
+	"github.com/labstack/echo/v4"
+	{{- end}}
+	"{{.ModuleName}}/internal/deps"
+)
+
+// Server holds the application server
+type Server struct {
+	{{- if eq .Framework "fiber"}}
+	app *fiber.App
+	{{- else if eq .Framework "gin"}}
+	router *gin.Engine
+	{{- else if eq .Framework "echo"}}
+	echo *echo.Echo
+	{{- end}}
+}
+
+// NewServer creates a new server instance
+func NewServer(d *deps.Deps) (*Server, error) {
+	{{- if eq .Framework "fiber"}}
+	app := fiber.New()
+	
+	// Health check
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
+	// Root endpoint
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("{{ .ProjectName }} running (fiber)!")
+	})
+
+	return &Server{app: app}, nil
+	{{- else if eq .Framework "gin"}}
+	router := gin.Default()
+
+	// Health check
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	// Root endpoint
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "{{ .ProjectName }} running (gin)!")
+	})
+
+	return &Server{router: router}, nil
+	{{- else if eq .Framework "echo"}}
+	e := echo.New()
+
+	// Health check
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	})
+
+	// Root endpoint
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "{{ .ProjectName }} running (echo)!")
+	})
+
+	return &Server{echo: e}, nil
+	{{- end}}
+}
+
+// Start starts the server
+func (s *Server) Start(cfg *deps.Config) error {
+	{{- if eq .Framework "fiber"}}
+	if cfg.Fiber == nil {
+		return fmt.Errorf("fiber config is required")
+	}
+	addr := cfg.Fiber.GetAddr()
+	log.Printf("Starting Fiber server on %s", addr)
+	if err := s.app.Listen(addr); err != nil {
+		return fmt.Errorf("failed to start fiber server: %w", err)
+	}
+	return nil
+	{{- else if eq .Framework "gin"}}
+	if cfg.Gin == nil {
+		return fmt.Errorf("gin config is required")
+	}
+	if cfg.Gin.Mode != "" {
+		gin.SetMode(cfg.Gin.Mode)
+	}
+	addr := cfg.Gin.GetAddr()
+	log.Printf("Starting Gin server on %s", addr)
+	if err := s.router.Run(addr); err != nil {
+		return fmt.Errorf("failed to start gin server: %w", err)
+	}
+	return nil
+	{{- else if eq .Framework "echo"}}
+	if cfg.Echo == nil {
+		return fmt.Errorf("echo config is required")
+	}
+	s.echo.Debug = cfg.Echo.Debug
+	addr := cfg.Echo.GetAddr()
+	log.Printf("Starting Echo server on %s", addr)
+	if err := s.echo.Start(addr); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("failed to start echo server: %w", err)
+	}
+	return nil
+	{{- end}}
+}
+

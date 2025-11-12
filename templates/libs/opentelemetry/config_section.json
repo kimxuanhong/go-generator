@@ -1,0 +1,8 @@
+{
+  "opentelemetry": {
+    "serviceName": "example-service",
+    "endpoint": "localhost:4318",
+    "insecure": true,
+    "sampleRatio": 1.0
+  }
+}

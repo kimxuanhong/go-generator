@@ -1,0 +1,28 @@
+FROM golang:{{ .GoVersion }} AS builder
+
+WORKDIR /src
+
+# Cache go mod downloads
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source and build
+COPY . .
+
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+
+# Build the project binary (assumes main is in ./cmd)
+RUN go build -trimpath -ldflags "-s -w" -o /app/{{ .BinaryName }} ./cmd
+
+### Final image: use distroless for small immutable image
+FROM gcr.io/distroless/static:nonroot
+
+COPY --from=builder /app/{{ .BinaryName }} /{{ .BinaryName }}
+
+USER nonroot
+
+EXPOSE {{ .Port }}
+
+ENTRYPOINT ["/{{ .BinaryName }}"]

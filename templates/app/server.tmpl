@@ -1,0 +1,119 @@
+package app
+
+import (
+	"fmt"
+	"log"
+
+	{{- if eq .Framework "fiber"}}
+	"github.com/gofiber/fiber/v2"
+	{{- else if eq .Framework "gin"}}
+	"github.com/gin-gonic/gin"
+	{{- else if eq .Framework "echo"}}
+	"github.com/labstack/echo/v4"
+	"net/http"
+	{{- end}}
+	"{{.ModuleName}}/internal/deps"
+)
+
+// Server holds the application server
+type Server struct {
+	{{- if eq .Framework "fiber"}}
+	app *fiber.App
+	{{- else if eq .Framework "gin"}}
+	router *gin.Engine
+	{{- else if eq .Framework "echo"}}
+	echo *echo.Echo
+	{{- end}}
+}
+
+// NewServer creates a new server instance
+func NewServer(d *deps.Deps) (*Server, error) {
+	// Initialize components via bootstrap (returns a grouped result)
+	res, err := SetupDependencies(d)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup dependencies: %w", err)
+	}
+
+	// Register cron job (if any) — present in BootstrapResult when cron is enabled
+	{{- if index .Includes "cron"}}
+	if res.ExampleJob != nil && d.Cron != nil {
+		_, err := d.Cron.AddJob("0 */5 * * * *", res.ExampleJob)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register cron job: %w", err)
+		}
+		d.Log.Info("Cron job registered: example-job (runs every 5 minutes)")
+	}
+	{{- end}}
+
+	{{- if eq .Framework "fiber"}}
+	app := fiber.New()
+	srv := &Server{app: app}
+
+    {{- if eq .IncludeExample true}}
+	// Register routes via centralized routes file
+	RegisterRoutes(srv, res.UserHandler)
+    {{- end}}
+
+	return srv, nil
+	{{- else if eq .Framework "gin"}}
+	router := gin.Default()
+	srv := &Server{router: router}
+
+    {{- if eq .IncludeExample true}}
+	// Register routes via centralized routes file
+	RegisterRoutes(srv, res.UserHandler)
+    {{- end}}
+
+	return srv, nil
+	{{- else if eq .Framework "echo"}}
+	e := echo.New()
+	srv := &Server{echo: e}
+
+    {{- if eq .IncludeExample true}}
+	// Register routes via centralized routes file
+	RegisterRoutes(srv, res.UserHandler)
+    {{- end}}
+
+	return srv, nil
+	{{- end}}
+}
+
+// Start starts the server
+func (s *Server) Start(cfg *deps.Config) error {
+	{{- if eq .Framework "fiber"}}
+	if cfg.Fiber == nil {
+		return fmt.Errorf("fiber config is required")
+	}
+	addr := cfg.Fiber.GetAddr()
+	log.Printf("Starting Fiber server on %s", addr)
+	if err := s.app.Listen(addr); err != nil {
+		return fmt.Errorf("failed to start fiber server: %w", err)
+	}
+	return nil
+	{{- else if eq .Framework "gin"}}
+	if cfg.Gin == nil {
+		return fmt.Errorf("gin config is required")
+	}
+	if cfg.Gin.Mode != "" {
+		gin.SetMode(cfg.Gin.Mode)
+	}
+	addr := cfg.Gin.GetAddr()
+	log.Printf("Starting Gin server on %s", addr)
+	if err := s.router.Run(addr); err != nil {
+		return fmt.Errorf("failed to start gin server: %w", err)
+	}
+	return nil
+	{{- else if eq .Framework "echo"}}
+	if cfg.Echo == nil {
+		return fmt.Errorf("echo config is required")
+	}
+	s.echo.Debug = cfg.Echo.Debug
+	addr := cfg.Echo.GetAddr()
+	log.Printf("Starting Echo server on %s", addr)
+	if err := s.echo.Start(addr); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("failed to start echo server: %w", err)
+	}
+	return nil
+	{{- end}}
+}
+

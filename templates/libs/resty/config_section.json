@@ -1,0 +1,12 @@
+{
+  "resty": {
+    "baseURL": "",
+    "timeout": 30,
+    "retryCount": 3,
+    "retryWaitTime": 1,
+    "debug": false,
+    "proxyURL": "",
+    "followRedirect": true
+  }
+}
+

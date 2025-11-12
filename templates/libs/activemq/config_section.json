@@ -1,0 +1,7 @@
+{
+  "activemq": {
+    "addr": "localhost:61613",
+    "login": "",
+    "passcode": ""
+  }
+}

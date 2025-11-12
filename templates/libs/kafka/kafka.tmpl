@@ -1,0 +1,79 @@
+package kafka
+
+import (
+	"context"
+	"time"
+
+	"github.com/segmentio/kafka-go"
+)
+
+// Config holds Kafka client configuration
+type Config struct {
+	Brokers  []string `json:"brokers" mapstructure:"brokers"`
+	Topic    string   `json:"topic" mapstructure:"topic"`
+	GroupID  string   `json:"groupId" mapstructure:"groupId"`
+	Balancer string   `json:"balancer" mapstructure:"balancer"` // roundrobin, leastbytes, crc32, murmur2
+}
+
+// Client wraps kafka Reader and Writer
+type Client struct {
+	Reader *kafka.Reader
+	Writer *kafka.Writer
+}
+
+// New creates a new Kafka client with reader and writer (writer optional if no topic)
+func New(cfg Config) (*Client, error) {
+	var balancer kafka.Balancer = &kafka.RoundRobin{}
+	switch cfg.Balancer {
+	case "leastbytes":
+		balancer = &kafka.LeastBytes{}
+	case "crc32":
+		balancer = &kafka.CRC32Balancer{}
+	case "hash":
+		balancer = &kafka.Hash{}
+	case "murmur2":
+		balancer = &kafka.Murmur2Balancer{}
+	}
+
+	cl := &Client{}
+	if cfg.Topic != "" {
+		cl.Writer = &kafka.Writer{
+			Addr:         kafka.TCP(cfg.Brokers...),
+			Topic:        cfg.Topic,
+			Balancer:     balancer,
+			RequiredAcks: kafka.RequireOne,
+		}
+	}
+
+	cl.Reader = kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     cfg.Brokers,
+		GroupID:     cfg.GroupID,
+		Topic:       cfg.Topic,
+		StartOffset: kafka.LastOffset,
+		MinBytes:    10e3, // 10KB
+		MaxBytes:    10e6, // 10MB
+	})
+
+	return cl, nil
+}
+
+// Close closes reader and writer
+func (c *Client) Close() error {
+	if c.Reader != nil {
+		_ = c.Reader.Close()
+	}
+	if c.Writer != nil {
+		_ = c.Writer.Close()
+	}
+	return nil
+}
+
+// Produce is a helper to send a single message (best-effort)
+func (c *Client) Produce(ctx context.Context, key, value []byte) error {
+	if c.Writer == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return c.Writer.WriteMessages(ctx, kafka.Message{Key: key, Value: value})
+}

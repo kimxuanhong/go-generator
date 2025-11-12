@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go Project Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin-right: 8px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 400;
+            color: #333;
+        }
+
+        .checkbox-item input[type="checkbox"] + label {
+            margin-bottom: 0;
+        }
+
+        .radio-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+        }
+
+        input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin-right: 8px;
+            accent-color: #667eea;
+        }
+
+        .radio-item label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 400;
+            color: #333;
+        }
+
+        .switch {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            background-color: #ccc;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .toggle input {
+            display: none;
+        }
+
+        .toggle input:checked + .slider {
+            transform: translateX(22px);
+        }
+
+        .toggle.active {
+            background-color: #667eea;
+        }
+
+        .slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        #includeExampleLabel {
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        #includeExampleLabel.active {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-generate:active {
+            transform: translateY(0);
+        }
+
+        .btn-reset {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-reset:hover {
+            background: #e0e0e0;
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loader {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn-generate.loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .error-message {
+            display: none;
+            background-color: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c33;
+        }
+
+        .success-message {
+            display: none;
+            background-color: #efe;
+            color: #3c3;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3c3;
+        }
+
+        .helper-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .checkbox-group,
+            .radio-group {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Go Project Generator</h1>
+            <p class="subtitle">Generate a production-ready Go project with clean architecture</p>
+        </header>
+
+        <form id="generatorForm">
+            <!-- Error/Success Messages -->
+            <div id="errorMessage" class="error-message"></div>
+            <div id="successMessage" class="success-message"></div>
+
+            <!-- Project Configuration -->
+            <div class="form-section">
+                <div class="section-title">Project Configuration</div>
+
+                <div class="form-group">
+                    <label for="projectName">Project Name *</label>
+                    <input type="text" id="projectName" name="projectName" placeholder="e.g., my-awesome-api" required>
+                    <div class="helper-text">Use kebab-case (lowercase with hyphens)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="moduleName">Module Name *</label>
+                    <input type="text" id="moduleName" name="moduleName" placeholder="e.g., github.com/myuser/my-awesome-api" required>
+                    <div class="helper-text">Go module path for imports</div>
+                </div>
+            </div>
+
+            <!-- Framework Selection -->
+            <div class="form-section">
+                <div class="section-title">Web Framework</div>
+
+                <div class="form-group" id="frameworkContainer">
+                    <div class="radio-group" id="frameworkGroup">
+                        <div style="text-align: center; padding: 20px; color: #999;">
+                            Loading frameworks...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Libraries -->
+            <div class="form-section">
+                <div class="section-title">Libraries & Services</div>
+
+                <div id="librariesContainer">
+                    <div style="text-align: center; padding: 20px; color: #999;">
+                        Loading libraries...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options -->
+            <div class="form-section">
+                <div class="section-title">Options</div>
+
+                <div class="form-group">
+                    <div class="switch">
+                        <div class="toggle" id="includeExampleToggle">
+                            <input type="checkbox" id="includeExample" name="includeExample">
+                            <span class="slider"></span>
+                        </div>
+                        <label for="includeExample" id="includeExampleLabel">Include Example Code</label>
+                    </div>
+                    <div class="helper-text">Includes domain, repository, usecase, and handler examples</div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="button-group">
+                <button type="submit" class="btn-generate" id="generateBtn">
+                    Generate Project
+                </button>
+                <button type="reset" class="btn-reset" id="resetBtn">
+                    Clear Form
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const form = document.getElementById('generatorForm');
+        const generateBtn = document.getElementById('generateBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+
+        // API endpoints
+        const API_ENDPOINT = '/generate';
+        const MANIFEST_ENDPOINT = '/manifest';
+
+        // Store manifest data
+        let manifestData = null;
+
+        // Load manifest on page load
+        async function loadManifest() {
+            try {
+                const response = await fetch(MANIFEST_ENDPOINT);
+                if (!response.ok) {
+                    throw new Error('Failed to load manifest');
+                }
+                manifestData = await response.json();
+                renderFrameworks();
+                renderLibraries();
+            } catch (error) {
+                showError('Failed to load manifest: ' + error.message);
+                console.error('Error loading manifest:', error);
+            }
+        }
+
+        // Render frameworks dynamically
+        function renderFrameworks() {
+            const container = document.getElementById('frameworkGroup');
+            if (!manifestData || !manifestData.frameworks) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">No frameworks available</div>';
+                return;
+            }
+
+            const frameworks = manifestData.frameworks;
+            const frameworkKeys = Object.keys(frameworks);
+            
+            if (frameworkKeys.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">No frameworks available</div>';
+                return;
+            }
+
+            container.innerHTML = frameworkKeys.map((key, index) => {
+                const framework = frameworks[key];
+                const displayName = framework.display_name || key;
+                const icon = framework.icon || '';
+                const checked = index === 0 ? 'checked' : '';
+                return `
+                    <div class="radio-item">
+                        <input type="radio" id="framework_${key}" name="framework" value="${key}" ${checked}>
+                        <label for="framework_${key}">${icon} ${displayName}</label>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render libraries dynamically grouped by category
+        function renderLibraries() {
+            const container = document.getElementById('librariesContainer');
+            if (!manifestData || !manifestData.libs) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">No libraries available</div>';
+                return;
+            }
+
+            const libs = manifestData.libs;
+            const libKeys = Object.keys(libs);
+            
+            if (libKeys.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #c33;">No libraries available</div>';
+                return;
+            }
+
+            // Group libraries by category
+            const categories = {};
+            libKeys.forEach(key => {
+                const lib = libs[key];
+                const category = lib.category || 'other';
+                if (!categories[category]) {
+                    categories[category] = [];
+                }
+                categories[category].push({ key, ...lib });
+            });
+
+            // Category display names
+            const categoryNames = {
+                'database': 'Database',
+                'caching': 'Caching',
+                'messaging': 'Messaging',
+                'utilities': 'Utilities',
+                'observability': 'Observability',
+                'other': 'Other'
+            };
+
+            // Render each category
+            container.innerHTML = Object.keys(categories).sort().map(category => {
+                const categoryLibs = categories[category];
+                const categoryName = categoryNames[category] || category.charAt(0).toUpperCase() + category.slice(1);
+                
+                // Check if this category has radio buttons (mutually exclusive)
+                const hasRadio = categoryLibs.some(lib => lib.is_radio);
+                const inputType = hasRadio ? 'radio' : 'checkbox';
+                const groupName = hasRadio ? `libs_${category}` : 'libs';
+                
+                return `
+                    <div class="form-group">
+                        <label>${categoryName}</label>
+                        <div class="checkbox-group">
+                            ${categoryLibs.map(lib => {
+                                const displayName = lib.display_name || lib.key;
+                                const icon = lib.icon || '';
+                                return `
+                                    <div class="checkbox-item">
+                                        <input type="${inputType}" id="lib_${lib.key}" name="${groupName}" value="${lib.key}">
+                                        <label for="lib_${lib.key}">${icon} ${displayName}</label>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Clear messages
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+
+            // Validate form
+            const projectName = document.getElementById('projectName').value.trim();
+            const moduleName = document.getElementById('moduleName').value.trim();
+
+            if (!projectName || !moduleName) {
+                showError('Project Name and Module Name are required');
+                return;
+            }
+
+            // Get selected libraries (handle both radio groups and checkboxes)
+            const libs = [];
+            // Get all checked checkboxes with name="libs"
+            const checkedCheckboxes = Array.from(document.querySelectorAll('input[name="libs"]:checked'));
+            checkedCheckboxes.forEach(el => libs.push(el.value));
+            
+            // Get all checked radio buttons in libs_* groups
+            const checkedRadios = Array.from(document.querySelectorAll('input[name^="libs_"]:checked'));
+            checkedRadios.forEach(el => libs.push(el.value));
+
+            // Build request
+            const request = {
+                projectName,
+                moduleName,
+                framework: document.querySelector('input[name="framework"]:checked').value,
+                libs,
+                includeExample: document.getElementById('includeExample').checked,
+                architecture: 'clean'
+            };
+
+            // Show loading state
+            generateBtn.disabled = true;
+            generateBtn.classList.add('loading');
+            generateBtn.innerHTML = '<span class="loader"></span>Generating...';
+
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(request)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Generation failed');
+                }
+
+                // Download the zip file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${projectName}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                showSuccess('Project generated successfully! Download started.');
+                form.reset();
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('loading');
+                generateBtn.innerHTML = 'Generate Project';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            errorMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            successMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        // Auto-format project name
+        document.getElementById('projectName').addEventListener('blur', (e) => {
+            const value = e.target.value
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '');
+            e.target.value = value;
+        });
+
+        // Auto-generate module name based on project name
+        document.getElementById('projectName').addEventListener('input', (e) => {
+            const projectName = e.target.value.trim();
+            if (projectName && !document.getElementById('moduleName').value) {
+                const moduleSuggestion = `github.com/user/${projectName}`;
+                // Uncomment to auto-fill, or just show as suggestion
+                // document.getElementById('moduleName').placeholder = moduleSuggestion;
+            }
+        });
+
+        // Load manifest when page loads
+        loadManifest();
+
+        // Function to update toggle color and label
+        function updateToggleState(isChecked) {
+            const toggle = document.getElementById('includeExampleToggle');
+            const label = document.getElementById('includeExampleLabel');
+            
+            if (isChecked) {
+                toggle.classList.add('active');
+                label.classList.add('active');
+            } else {
+                toggle.classList.remove('active');
+                label.classList.remove('active');
+            }
+        }
+
+        // Listen for click on Include Example Code label and toggle
+        const includeExampleLabel = document.getElementById('includeExampleLabel');
+        const includeExampleToggle = document.getElementById('includeExampleToggle');
+        const includeExampleCheckbox = document.getElementById('includeExample');
+
+        if (includeExampleLabel) {
+            includeExampleLabel.addEventListener('click', (e) => {
+                e.preventDefault();
+                includeExampleCheckbox.checked = !includeExampleCheckbox.checked;
+                updateToggleState(includeExampleCheckbox.checked);
+            });
+        }
+
+        if (includeExampleToggle) {
+            includeExampleToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                includeExampleCheckbox.checked = !includeExampleCheckbox.checked;
+                updateToggleState(includeExampleCheckbox.checked);
+            });
+        }
+
+        // Also listen to checkbox change event
+        if (includeExampleCheckbox) {
+            includeExampleCheckbox.addEventListener('change', (e) => {
+                updateToggleState(e.target.checked);
+            });
+            updateToggleState(includeExampleCheckbox.checked);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+package opentelemetry
+
+import (
+	"context"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+)
+
+// Config holds OpenTelemetry initialization options.
+type Config struct {
+	ServiceName string  `json:"serviceName" mapstructure:"serviceName"`
+	Endpoint    string  `json:"endpoint" mapstructure:"endpoint"`
+	Insecure    bool    `json:"insecure" mapstructure:"insecure"`
+	SampleRatio float64 `json:"sampleRatio" mapstructure:"sampleRatio"`
+}
+
+// Provider wraps the tracer provider and exporter for graceful shutdown.
+type Provider struct {
+	tc context.Context
+	tp *sdktrace.TracerProvider
+}
+
+// New creates a tracer provider using the OTLP HTTP exporter.
+func New(ctx context.Context, cfg Config) (*Provider, error) {
+	clientOpts := []otlptracehttp.Option{}
+	if cfg.Endpoint != "" {
+		clientOpts = append(clientOpts, otlptracehttp.WithEndpoint(cfg.Endpoint))
+	}
+	if cfg.Insecure {
+		clientOpts = append(clientOpts, otlptracehttp.WithInsecure())
+	}
+
+	client := otlptracehttp.NewClient(clientOpts...)
+	exporter, err := otlptrace.New(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(normalizeSampleRatio(cfg.SampleRatio)))
+	res, err := resource.New(
+		ctx,
+		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithAttributes(semconv.ServiceName(cfg.ServiceName)),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sampler),
+		sdktrace.WithBatcher(exporter),
+	)
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	return &Provider{tc: ctx, tp: tp}, nil
+}
+
+// Tracer returns a named tracer instance.
+func (p *Provider) Tracer(name string, opts ...trace.TracerOption) trace.Tracer {
+	if p.tp != nil {
+		return p.tp.Tracer(name, opts...)
+	}
+	return otel.Tracer(name, opts...)
+}
+
+// Shutdown flushes and closes the tracer provider.
+func (p *Provider) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		ctx = p.tc
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	if p.tp != nil {
+		return p.tp.Shutdown(ctx)
+	}
+	return nil
+}
+
+func normalizeSampleRatio(value float64) float64 {
+	if value <= 0 {
+		return 1.0
+	}
+	if value > 1 {
+		return 1.0
+	}
+	return value
+}

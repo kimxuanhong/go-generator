@@ -1,0 +1,73 @@
+package app
+
+import (
+    {{- if index .Includes "cron"}}
+    "{{.ModuleName}}/internal/jobs"
+    {{- end}}
+
+    "{{.ModuleName}}/internal/adapter/handler"
+    "{{.ModuleName}}/internal/domain"
+    "{{.ModuleName}}/internal/repository"
+    "{{.ModuleName}}/internal/usecase"
+    "{{.ModuleName}}/internal/deps"
+)
+
+// SetupDependencies initializes repositories, usecases, handlers and optional jobs.
+// BootstrapResult groups the initialized components returned by SetupDependencies.
+type BootstrapResult struct {
+    UserRepo    domain.UserRepository
+    CacheRepo   domain.CacheRepository
+    UserUsecase *usecase.UserUsecase
+    UserHandler *handler.UserHandler
+    {{- if index .Includes "cron"}}
+    ExampleJob  *jobs.ExampleJob
+    {{- end}}
+}
+
+func SetupDependencies(d *deps.Deps) (*BootstrapResult, error) {
+    // Initialize repositories
+    var userRepo domain.UserRepository
+    var cacheRepo domain.CacheRepository
+
+    {{- if or (index .Includes "postgres") (index .Includes "mysql")}}
+    // Pass the unified DB field (d.DB) to repository constructor
+    userRepo = repository.NewUserRepository(d.DB)
+    {{- else}}
+    userRepo = repository.NewUserRepository()
+    {{- end}}
+
+    {{- if index .Includes "redis"}}
+    cacheRepo = repository.NewCacheRepository(d.Redis)
+    {{- else}}
+    cacheRepo = repository.NewCacheRepository()
+    {{- end}}
+
+    // Initialize usecase and handler
+    userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo)
+    userHandler := handler.NewUserHandler(userUsecase)
+
+    // Optional job initialization (only if cron is enabled)
+    {{- if index .Includes "cron"}}
+    var exampleJob *jobs.ExampleJob
+    {{- if or (index .Includes "postgres") (index .Includes "mysql")}}
+    exampleJob = jobs.NewExampleJob({{- if index .Includes "redis"}}d.Redis, {{- end}}d.DB)
+    {{- else if index .Includes "redis"}}
+    exampleJob = jobs.NewExampleJob(d.Redis)
+    {{- else}}
+    exampleJob = jobs.NewExampleJob()
+    {{- end}}
+    {{- end}}
+
+    // Pack results into a single struct to simplify the generated API.
+    result := &BootstrapResult{
+        UserRepo:    userRepo,
+        CacheRepo:   cacheRepo,
+        UserUsecase: userUsecase,
+        UserHandler: userHandler,
+        {{- if index .Includes "cron"}}
+        ExampleJob:  exampleJob,
+        {{- end}}
+    }
+
+    return result, nil
+}

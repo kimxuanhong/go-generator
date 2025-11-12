@@ -1,0 +1,100 @@
+# Environment Configuration Example
+# Copy this file to .env and set your actual values
+# The application will load config from config/config.json and override with these env vars
+
+# Framework configuration (Echo/Gin/Fiber)
+# Uncomment and set the appropriate ones for your framework
+# ECHO_HOST=0.0.0.0
+# ECHO_PORT=8080
+# ECHO_DEBUG=false
+
+# GIN_HOST=0.0.0.0
+# GIN_PORT=8080
+# GIN_MODE=debug
+
+# FIBER_HOST=0.0.0.0
+# FIBER_PORT=8080
+# FIBER_PREFORK=false
+
+{{- if index .Includes "redis"}}
+# Redis configuration
+# REDIS_ADDR=localhost:6379
+# REDIS_PASSWORD=
+# REDIS_DB=0
+{{- end}}
+
+{{- if index .Includes "postgres"}}
+# PostgreSQL configuration
+# POSTGRES_DSN=postgres://postgres:postgres@localhost:5432/example
+{{- end}}
+
+{{- if index .Includes "mysql"}}
+# MySQL configuration
+# MYSQL_DSN=user:password@tcp(localhost:3306)/database?charset=utf8mb4&parseTime=True&loc=Local
+{{- end}}
+
+{{- if index .Includes "gorm"}}
+# GORM generic configuration
+# GORM_DRIVER=postgres
+# GORM_DSN=postgres://postgres:postgres@localhost:5432/example?sslmode=disable
+# GORM_LOGGERLEVEL=warn
+# GORM_SKIPDEFAULTTRANSACTION=true
+# GORM_PREPARESTMT=false
+{{- end}}
+
+{{- if index .Includes "logrus"}}
+# Logrus configuration
+# LOGRUS_LEVEL=info
+# LOGRUS_FORMAT=json
+{{- end}}
+
+{{- if index .Includes "resty"}}
+# Resty HTTP client configuration
+# RESTY_TIMEOUT=30
+# RESTY_BASE_URL=https://api.example.com
+{{- end}}
+
+{{- if index .Includes "cron"}}
+# Cron job configuration
+# CRON_ENABLED=true
+{{- end}}
+
+{{- if index .Includes "rabbitmq"}}
+# RabbitMQ configuration
+# RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+{{- end}}
+
+{{- if index .Includes "kafka"}}
+# Kafka configuration
+# KAFKA_BROKERS=localhost:9092
+# KAFKA_TOPIC=example
+# KAFKA_GROUPID=example-group
+# KAFKA_BALANCER=roundrobin
+{{- end}}
+
+{{- if index .Includes "activemq"}}
+# ActiveMQ configuration
+# ACTIVEMQ_ADDR=localhost:61613
+# ACTIVEMQ_LOGIN=
+# ACTIVEMQ_PASSCODE=
+{{- end}}
+
+{{- if index .Includes "mapstructure"}}
+# Mapstructure configuration
+# MAPSTRUCTURE_TAGNAME=mapstructure
+# MAPSTRUCTURE_WEAKLYTYPEDINPUT=true
+# MAPSTRUCTURE_IGNOREUNTAGGEDFIELDS=false
+{{- end}}
+
+{{- if index .Includes "validator"}}
+# Validator configuration
+# VALIDATOR_TAGNAME=validate
+{{- end}}
+
+{{- if index .Includes "opentelemetry"}}
+# OpenTelemetry configuration
+# OPENTELEMETRY_SERVICENAME=example-service
+# OPENTELEMETRY_ENDPOINT=localhost:4318
+# OPENTELEMETRY_INSECURE=true
+# OPENTELEMETRY_SAMPLERATIO=1.0
+{{- end}}

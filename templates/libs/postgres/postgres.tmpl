@@ -1,0 +1,56 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+// Config holds PostgreSQL connection configuration
+type Config struct {
+	DSN string `json:"dsn"`
+}
+
+// DB wraps the GORM database connection
+type DB struct {
+	gorm *gorm.DB
+}
+
+// New creates a new PostgreSQL database connection
+func New(cfg Config) (*DB, error) {
+	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	return &DB{gorm: db}, nil
+}
+
+// Ping checks the connection to PostgreSQL
+func (d *DB) Ping(ctx context.Context) error {
+	sqlDB, err := d.gorm.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}
+
+// GetDB returns the underlying *sql.DB for direct access
+func (d *DB) GetDB() (*sql.DB, error) {
+	return d.gorm.DB()
+}
+
+// GORM returns the underlying *gorm.DB for direct access
+func (d *DB) GORM() *gorm.DB {
+	return d.gorm
+}
+
+// Close closes the PostgreSQL connection
+func (d *DB) Close() error {
+	sqlDB, err := d.gorm.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}

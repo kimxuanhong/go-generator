@@ -1,0 +1,82 @@
+package usecase
+
+import (
+	"fmt"
+
+	{{- if and (index .Includes "resty") (index .Includes "redis")}}
+	"github.com/go-resty/resty/v2"
+	{{- end}}
+
+	"{{.ModuleName}}/internal/domain"
+)
+
+// UserUsecase handles user business logic
+type UserUsecase struct {
+	userRepo  domain.UserRepository
+	cacheRepo domain.CacheRepository
+}
+
+// NewUserUsecase creates a new user usecase
+func NewUserUsecase(userRepo domain.UserRepository, cacheRepo domain.CacheRepository) *UserUsecase {
+	return &UserUsecase{
+		userRepo:  userRepo,
+		cacheRepo: cacheRepo,
+	}
+}
+
+// GetUser retrieves a user by ID
+func (u *UserUsecase) GetUser(id int64) (*domain.User, error) {
+	// Check cache first
+	cacheKey := fmt.Sprintf("user:%d", id)
+	if cached, err := u.cacheRepo.Get(cacheKey); err == nil && cached != "" {
+		// Return cached user if available
+		// In real implementation, deserialize from cache
+	}
+
+	// Get from repository
+	user, err := u.userRepo.GetByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Cache the user
+	if user != nil {
+		// In real implementation, serialize and cache
+		_ = u.cacheRepo.Set(cacheKey, "")
+	}
+
+	return user, nil
+}
+
+{{- if and (index .Includes "resty") (index .Includes "redis")}}
+// FetchExternalData fetches data from an external HTTP API and caches it in Redis
+func (u *UserUsecase) FetchExternalData(url string) (string, error) {
+	cacheKey := fmt.Sprintf("external:%s", url)
+	if cached, err := u.cacheRepo.Get(cacheKey); err == nil && cached != "" {
+		return cached, nil
+	}
+
+	// Create a temporary Resty client for the example. In real applications prefer reusing a client from deps.
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch external resource: %w", err)
+	}
+
+	body := string(resp.Body())
+
+	// Cache the response (best-effort)
+	_ = u.cacheRepo.Set(cacheKey, body)
+
+	return body, nil
+}
+{{- end}}
+
+// CreateUser creates a new user
+func (u *UserUsecase) CreateUser(user *domain.User) error {
+	if err := u.userRepo.Create(user); err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+	return nil
+}
+

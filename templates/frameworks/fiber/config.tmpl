@@ -1,0 +1,18 @@
+package app
+
+import (
+	"fmt"
+)
+
+// Config holds Fiber server configuration
+type Config struct {
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	Prefork bool   `json:"prefork"`
+}
+
+// GetAddr returns the address string for Fiber server
+func (c *Config) GetAddr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+

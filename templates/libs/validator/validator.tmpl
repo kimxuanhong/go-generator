@@ -1,0 +1,36 @@
+package validator
+
+import (
+	validatorv10 "github.com/go-playground/validator/v10"
+)
+
+// Config holds options for configuring the validator instance.
+type Config struct {
+	TagName string `json:"tagName" mapstructure:"tagName"`
+}
+
+// Validator wraps the underlying go-playground validator.
+type Validator struct {
+	*validatorv10.Validate
+}
+
+// New creates a configured validator instance.
+func New(cfg Config) (*Validator, error) {
+	v := validatorv10.New()
+
+	if cfg.TagName != "" {
+		v.SetTagName(cfg.TagName)
+	}
+
+	return &Validator{Validate: v}, nil
+}
+
+// RegisterValidation proxies to the underlying validator for convenience.
+func (v *Validator) RegisterValidation(tag string, fn validatorv10.Func) error {
+	return v.Validate.RegisterValidation(tag, fn)
+}
+
+// Struct validates the given struct and returns the validation error.
+func (v *Validator) Struct(s interface{}) error {
+	return v.Validate.Struct(s)
+}

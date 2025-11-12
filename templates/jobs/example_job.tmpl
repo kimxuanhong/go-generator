@@ -1,0 +1,64 @@
+package jobs
+
+import (
+	"time"
+
+	{{- if index .Includes "redis"}}
+	"{{.ModuleName}}/internal/infrastructure/redis"
+	{{- end}}
+	{{- if index .Includes "postgres"}}
+	"{{.ModuleName}}/internal/infrastructure/postgres"
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	"{{.ModuleName}}/internal/infrastructure/mysql"
+	{{- end}}
+)
+
+// ExampleJob represents an example cron job
+type ExampleJob struct {
+	{{- if index .Includes "redis"}}
+	redis *redis.Client
+	{{- end}}
+	{{- if index .Includes "postgres"}}
+	DB *postgres.DB
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	DB *mysql.DB
+	{{- end}}
+}
+
+// NewExampleJob creates a new example job
+func NewExampleJob({{- if index .Includes "redis"}}redis *redis.Client{{- end}}{{- if and (index .Includes "redis") (or (index .Includes "postgres") (index .Includes "mysql"))}}, {{- end}}{{- if index .Includes "postgres"}}db *postgres.DB{{- end}}{{- if and (index .Includes "postgres") (index .Includes "mysql")}}, {{- end}}{{- if index .Includes "mysql"}}db *mysql.DB{{- end}}) *ExampleJob {
+	return &ExampleJob{
+		{{- if index .Includes "redis"}}
+		redis: redis,
+		{{- end}}
+		{{- if index .Includes "postgres"}}
+		DB: db,
+		{{- end}}
+		{{- if index .Includes "mysql"}}
+		DB: db,
+		{{- end}}
+	}
+}
+
+// Run executes the job (implements cron.Job interface)
+func (j *ExampleJob) Run() {
+	// Example job logic
+	// This is a placeholder - implement your actual job logic here
+	_ = time.Now()
+	{{- if index .Includes "redis"}}
+	// Example: Use Redis
+	_ = j.redis
+	{{- end}}
+	{{- if index .Includes "postgres"}}
+	// Example: Use DB (Postgres)
+	_ = j.DB
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	// Example: Use DB (MySQL)
+	_ = j.DB
+	{{- end}}
+	// Log job execution
+	// In real implementation, you would use a logger here
+}

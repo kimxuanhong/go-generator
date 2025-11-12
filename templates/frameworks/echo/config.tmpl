@@ -1,0 +1,17 @@
+package app
+
+import (
+	"fmt"
+)
+
+// Config holds Echo server configuration
+type Config struct {
+	Host  string `json:"host"`
+	Port  int    `json:"port"`
+	Debug bool   `json:"debug"`
+}
+
+// GetAddr returns the address string for Echo server
+func (c *Config) GetAddr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}

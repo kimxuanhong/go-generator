@@ -1,0 +1,40 @@
+package activemq
+
+import (
+	"time"
+
+	"github.com/go-stomp/stomp"
+)
+
+// Config for ActiveMQ STOMP connection
+type Config struct {
+	Addr     string `json:"addr" mapstructure:"addr"`
+	Login    string `json:"login" mapstructure:"login"`
+	Passcode string `json:"passcode" mapstructure:"passcode"`
+}
+
+// Client wraps the STOMP connection
+type Client struct {
+	Conn *stomp.Conn
+}
+
+// New creates a STOMP connection
+func New(cfg Config) (*Client, error) {
+	opts := []func(*stomp.Conn) error{
+		stomp.ConnOpt.Login(cfg.Login, cfg.Passcode),
+		stomp.ConnOpt.HeartBeat(10*time.Second, 10*time.Second),
+	}
+	conn, err := stomp.Dial("tcp", cfg.Addr, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{Conn: conn}, nil
+}
+
+// Close closes the connection
+func (c *Client) Close() error {
+	if c.Conn != nil {
+		return c.Conn.Disconnect()
+	}
+	return nil
+}
