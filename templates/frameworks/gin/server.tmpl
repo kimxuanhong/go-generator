@@ -5,7 +5,10 @@ import (
 	"log"
 	"net/http"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/gin-gonic/gin"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
 )
 
@@ -21,6 +24,8 @@ func Start(cfg *deps.Config) error {
 	}
 
 	r := gin.Default()
+
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {

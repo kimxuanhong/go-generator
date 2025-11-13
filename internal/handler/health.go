@@ -11,15 +11,29 @@ func NewHealthHandler() *HealthHandler {
 	return &HealthHandler{}
 }
 
+// HealthResponse represents the payload returned by the health endpoint.
+type HealthResponse struct {
+	Status  string `json:"status"`
+	Service string `json:"service"`
+}
+
+// HandleHealth godoc
+// @Summary Check service health
+// @Description Returns the health status of the generator service.
+// @Tags health
+// @Produce json
+// @Success 200 {object} HealthResponse
+// @Failure 405 {object} ErrorResponse
+// @Router /health [get]
 func (h *HealthHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.writeError(w, "Only GET method allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	response := map[string]string{
-		"status":  "ok",
-		"service": "go-project-generator",
+	response := HealthResponse{
+		Status:  "ok",
+		Service: "go-project-generator",
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -33,5 +47,5 @@ func (h *HealthHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 func (h *HealthHandler) writeError(w http.ResponseWriter, message string, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	_ = json.NewEncoder(w).Encode(ErrorResponse{Error: message})
 }

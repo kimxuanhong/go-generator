@@ -9,10 +9,17 @@ import (
 	"syscall"
 	"time"
 
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	docs "github.com/xhkzeroone/go-generator/docs"
 	"github.com/xhkzeroone/go-generator/internal/handler"
 	"github.com/xhkzeroone/go-generator/internal/service"
 )
 
+// @title Go Generator API
+// @version 1.0
+// @description API endpoints for generating Go project scaffolding.
+// @BasePath /
 func main() {
 	// Initialize service
 	manifestPath := "manifest.json"
@@ -33,10 +40,13 @@ func main() {
 	// Setup routes
 	mux := http.NewServeMux()
 
+	docs.SwaggerInfo.BasePath = "/"
+
 	// API endpoints (must be before the catch-all)
 	mux.HandleFunc("/generate", genHandler.HandleGenerate)
 	mux.HandleFunc("/health", healthHandler.HandleHealth)
 	mux.HandleFunc("/manifest", manifestHandler.HandleManifest)
+	mux.Handle("/swagger/", httpSwagger.WrapHandler)
 
 	// Serve frontend as catch-all
 	fs := http.FileServer(http.Dir("public"))

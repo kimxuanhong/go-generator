@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"github.com/labstack/echo/v4"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
 )
 
@@ -19,6 +21,8 @@ func Start(cfg *deps.Config) error {
 
 	// Set debug mode
 	e.Debug = cfg.Echo.Debug
+
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {

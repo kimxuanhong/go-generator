@@ -5,13 +5,18 @@ import (
 	"log"
 
 	{{- if eq .Framework "fiber"}}
+	fiberSwagger "github.com/gofiber/swagger"
 	"github.com/gofiber/fiber/v2"
 	{{- else if eq .Framework "gin"}}
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/gin-gonic/gin"
 	{{- else if eq .Framework "echo"}}
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	{{- end}}
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
 )
 
@@ -47,6 +52,7 @@ func NewServer(d *deps.Deps) (*Server, error) {
 
 	{{- if eq .Framework "fiber"}}
 	app := fiber.New()
+	app.Get("/swagger/*", fiberSwagger.HandlerDefault)
 	srv := &Server{app: app}
 
     {{- if eq .IncludeExample true}}
@@ -57,6 +63,7 @@ func NewServer(d *deps.Deps) (*Server, error) {
 	return srv, nil
 	{{- else if eq .Framework "gin"}}
 	router := gin.Default()
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	srv := &Server{router: router}
 
     {{- if eq .IncludeExample true}}
@@ -67,6 +74,7 @@ func NewServer(d *deps.Deps) (*Server, error) {
 	return srv, nil
 	{{- else if eq .Framework "echo"}}
 	e := echo.New()
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	srv := &Server{echo: e}
 
     {{- if eq .IncludeExample true}}

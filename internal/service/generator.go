@@ -141,6 +141,11 @@ func (s *GeneratorService) GenerateProject(req *GenerateRequest) ([]byte, error)
 		return nil, fmt.Errorf("failed to render deps package: %w", err)
 	}
 
+	// Render Swagger docs stub
+	if err := s.renderDocsStub(tmp, req); err != nil {
+		return nil, fmt.Errorf("failed to render docs stub: %w", err)
+	}
+
 	// Write go.mod with all dependencies
 	if err := s.renderGoMod(tmp, req, allImports); err != nil {
 		return nil, fmt.Errorf("failed to render go.mod: %w", err)
@@ -203,6 +208,7 @@ func (s *GeneratorService) GenerateProject(req *GenerateRequest) ([]byte, error)
 func (s *GeneratorService) createBaseStructure(tmp string, includeExample bool, framework string) error {
 	dirs := []string{
 		"cmd",
+		"docs",
 		"internal/app",
 		"internal/infrastructure",
 		"internal/deps",
@@ -413,6 +419,15 @@ func (s *GeneratorService) renderDepsPackage(tmp string, req *GenerateRequest, i
 		"Includes":   includes,
 	}
 	return s.renderTemplate("templates/deps/config.tmpl", configPath, configData)
+}
+
+func (s *GeneratorService) renderDocsStub(tmp string, req *GenerateRequest) error {
+	outPath := filepath.Join(tmp, "docs", "docs.go")
+	data := map[string]interface{}{
+		"ModuleName":  req.ModuleName,
+		"ProjectName": req.ProjectName,
+	}
+	return s.renderTemplate("templates/docs/swagger.tmpl", outPath, data)
 }
 
 func (s *GeneratorService) renderGoMod(tmp string, req *GenerateRequest, imports []string) error {

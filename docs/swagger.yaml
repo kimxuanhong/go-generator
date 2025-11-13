@@ -1,0 +1,167 @@
+basePath: /
+definitions:
+  handler.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  handler.HealthResponse:
+    properties:
+      service:
+        type: string
+      status:
+        type: string
+    type: object
+  models.FrameworkDef:
+    properties:
+      config_section:
+        type: string
+      display_name:
+        description: e.g., "Gin", "Echo"
+        type: string
+      icon:
+        description: "e.g., \"\U0001F378\", \"\U0001F50A\""
+        type: string
+      imports:
+        items:
+          type: string
+        type: array
+      templates:
+        items:
+          type: string
+        type: array
+    type: object
+  models.LibDef:
+    properties:
+      category:
+        description: e.g., "database", "caching", "utilities"
+        type: string
+      config_section:
+        type: string
+      display_name:
+        description: e.g., "PostgreSQL", "Redis"
+        type: string
+      icon:
+        description: "e.g., \"\U0001F418\", \"\U0001F534\""
+        type: string
+      imports:
+        items:
+          type: string
+        type: array
+      is_radio:
+        description: true for radio (mutually exclusive), false for checkbox
+        type: boolean
+      templates:
+        items:
+          type: string
+        type: array
+    type: object
+  models.Manifest:
+    properties:
+      frameworks:
+        additionalProperties:
+          $ref: '#/definitions/models.FrameworkDef'
+        type: object
+      libs:
+        additionalProperties:
+          $ref: '#/definitions/models.LibDef'
+        type: object
+    type: object
+  service.GenerateRequest:
+    properties:
+      architecture:
+        type: string
+      framework:
+        type: string
+      includeExample:
+        description: 'Optional: include example code (User entity, usecase, handler)'
+        type: boolean
+      libs:
+        items:
+          type: string
+        type: array
+      moduleName:
+        type: string
+      projectName:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API endpoints for generating Go project scaffolding.
+  title: Go Generator API
+  version: "1.0"
+paths:
+  /generate:
+    post:
+      consumes:
+      - application/json
+      description: Generates a Go project scaffold based on the provided configuration
+        and returns it as a ZIP archive.
+      parameters:
+      - description: Generator configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.GenerateRequest'
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: Generated project archive
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "405":
+          description: Method Not Allowed
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Generate a Go project scaffold
+      tags:
+      - generator
+  /health:
+    get:
+      description: Returns the health status of the generator service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.HealthResponse'
+        "405":
+          description: Method Not Allowed
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Check service health
+      tags:
+      - health
+  /manifest:
+    get:
+      description: Returns the manifest describing available frameworks and libraries.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Manifest'
+        "405":
+          description: Method Not Allowed
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get generator manifest
+      tags:
+      - manifest
+swagger: "2.0"

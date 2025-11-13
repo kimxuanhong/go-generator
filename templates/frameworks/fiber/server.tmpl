@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 
+	fiberSwagger "github.com/gofiber/swagger"
 	"github.com/gofiber/fiber/v2"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
 )
 
@@ -17,6 +19,8 @@ func Start(cfg *deps.Config) error {
 	app := fiber.New(fiber.Config{
 		Prefork: cfg.Fiber.Prefork,
 	})
+
+	app.Get("/swagger/*", fiberSwagger.HandlerDefault)
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {

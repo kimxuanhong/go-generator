@@ -185,7 +185,9 @@
   "frameworks": {
     "gin": {
       "imports": [
-        "github.com/gin-gonic/gin"
+        "github.com/gin-gonic/gin",
+        "github.com/swaggo/files",
+        "github.com/swaggo/gin-swagger"
       ],
       "config_section": "templates/frameworks/gin/config_section.json",
       "templates": [
@@ -196,7 +198,8 @@
     },
     "fiber": {
       "imports": [
-        "github.com/gofiber/fiber/v2"
+        "github.com/gofiber/fiber/v2",
+        "github.com/gofiber/swagger"
       ],
       "config_section": "templates/frameworks/fiber/config_section.json",
       "templates": [
@@ -207,7 +210,8 @@
     },
     "echo": {
       "imports": [
-        "github.com/labstack/echo/v4"
+        "github.com/labstack/echo/v4",
+        "github.com/swaggo/echo-swagger"
       ],
       "config_section": "templates/frameworks/echo/config_section.json",
       "templates": [

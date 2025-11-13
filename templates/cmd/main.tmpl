@@ -5,6 +5,9 @@ import (
 	"context"
 	{{- end}}
 	"log"
+	{{- if or (eq .Framework "fiber") (eq .Framework "gin") (eq .Framework "echo")}}
+	_ "{{.ModuleName}}/docs"
+	{{- end}}
 
 	"{{.ModuleName}}/internal/app"
 	"{{.ModuleName}}/internal/deps"

@@ -128,6 +128,15 @@ cp .env.example .env
 
 Edit `config/config.json` for default values. Environment variables will override config file values.
 
+### Swagger Documentation
+
+This project includes Swagger annotations and a placeholder spec in `docs/`. After updating handlers or adding new routes, regenerate the documentation:
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@latest
+swag init -g cmd/main.go -o docs
+```
+
 {{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "rabbitmq")}}
 ### 3. Start Services (Docker Compose)
 

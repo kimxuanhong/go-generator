@@ -14,12 +14,21 @@ import (
 	{{- end}}
 	"strconv"
 
+	"{{.ModuleName}}/internal/domain"
 	"{{.ModuleName}}/internal/usecase"
 )
 
 // UserHandler handles user HTTP requests
 type UserHandler struct {
 	userUsecase *usecase.UserUsecase
+}
+
+// UserResponse is the response representation exposed via Swagger docs.
+type UserResponse = domain.User
+
+// ErrorResponse represents a standard error payload.
+type ErrorResponse struct {
+	Error string `json:"error"`
 }
 
 // NewUserHandler creates a new user handler
@@ -30,60 +39,75 @@ func NewUserHandler(userUsecase *usecase.UserUsecase) *UserHandler {
 }
 
 {{- if eq .Framework "fiber"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid user id",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid user id"})
 	}
 
 	user, err := h.userUsecase.GetUser(id)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{Error: err.Error()})
 	}
 
 	return c.JSON(user)
 }
 {{- else if eq .Framework "gin"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid user id",
-		})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid user id"})
 		return
 	}
 
 	user, err := h.userUsecase.GetUser(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, user)
 }
 {{- else if eq .Framework "echo"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid user id",
-		})
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid user id"})
 	}
 
 	user, err := h.userUsecase.GetUser(id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, user)
