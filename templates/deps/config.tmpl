@@ -3,47 +3,15 @@ package deps
 import (
 	"fmt"
 	"strings"
-	{{- if index .Includes "redis"}}
-	"{{.ModuleName}}/internal/infrastructure/redis"
-	{{- end}}
-	{{- if index .Includes "postgres"}}
-	"{{.ModuleName}}/internal/infrastructure/postgres"
-	{{- end}}
-	{{- if index .Includes "mysql"}}
-	"{{.ModuleName}}/internal/infrastructure/mysql"
-	{{- end}}
-	{{- if index .Includes "logrus"}}
-	"{{.ModuleName}}/internal/infrastructure/logrus"
-	{{- end}}
-	{{- if index .Includes "resty"}}
-	"{{.ModuleName}}/internal/infrastructure/resty"
-	{{- end}}
-	{{- if index .Includes "cron"}}
-	"{{.ModuleName}}/internal/infrastructure/cron"
-	{{- end}}
-	{{- if index .Includes "rabbitmq"}}
-	"{{.ModuleName}}/internal/infrastructure/rabbitmq"
-	{{- end}}
-	{{- if index .Includes "kafka"}}
-	kafkainfra "{{.ModuleName}}/internal/infrastructure/kafka"
-	{{- end}}
-	{{- if index .Includes "activemq"}}
-	activemqinfra "{{.ModuleName}}/internal/infrastructure/activemq"
-	{{- end}}
-	{{- if index .Includes "gorm"}}
-	gormcfg "{{.ModuleName}}/internal/infrastructure/gorm"
-	{{- end}}
-	{{- if index .Includes "mapstructure"}}
-	mapstructureinfra "{{.ModuleName}}/internal/infrastructure/mapstructure"
-	{{- end}}
-	{{- if index .Includes "validator"}}
-	validatorinfra "{{.ModuleName}}/internal/infrastructure/validator"
-	{{- end}}
-	{{- if index .Includes "opentelemetry"}}
-	otelinfra "{{.ModuleName}}/internal/infrastructure/opentelemetry"
-	{{- end}}
+	{{- range $name, $m := .Meta }}
+    {{- if index $.Includes $name }}
+    {{- range $imp := $m.Imports }}
+    {{$imp}}
+    {{- end }}
+    {{- end }}
+    {{- end }}
 
-	mapstructure "github.com/mitchellh/mapstructure"
+    mapstructure "github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
@@ -94,45 +62,12 @@ type Config struct {
 	{{- else if eq .Framework "echo"}}
 	Echo *EchoConfig `json:"echo,omitempty" mapstructure:"echo"`
 	{{- end}}
-	{{- if index .Includes "redis"}}
-	Redis *redis.Config `json:"redis,omitempty" mapstructure:"redis"`
-	{{- end}}
-	{{- if index .Includes "postgres"}}
-	Postgres *postgres.Config `json:"postgres,omitempty" mapstructure:"postgres"`
-	{{- end}}
-	{{- if index .Includes "mysql"}}
-	MySQL *mysql.Config `json:"mysql,omitempty" mapstructure:"mysql"`
-	{{- end}}
-	{{- if index .Includes "logrus"}}
-	Logrus *logrus.Config `json:"logrus,omitempty" mapstructure:"logrus"`
-	{{- end}}
-	{{- if index .Includes "resty"}}
-	Resty *resty.Config `json:"resty,omitempty" mapstructure:"resty"`
-	{{- end}}
-	{{- if index .Includes "cron"}}
-	Cron *cron.Config `json:"cron,omitempty" mapstructure:"cron"`
-	{{- end}}
-	{{- if index .Includes "rabbitmq"}}
-	RabbitMQ *rabbitmq.Config `json:"rabbitmq,omitempty" mapstructure:"rabbitmq"`
-	{{- end}}
-	{{- if index .Includes "kafka"}}
-	Kafka *kafkainfra.Config `json:"kafka,omitempty" mapstructure:"kafka"`
-	{{- end}}
-	{{- if index .Includes "activemq"}}
-	ActiveMQ *activemqinfra.Config `json:"activemq,omitempty" mapstructure:"activemq"`
-	{{- end}}
-	{{- if index .Includes "gorm"}}
-	Gorm *gormcfg.Config `json:"gorm,omitempty" mapstructure:"gorm"`
-	{{- end}}
-	{{- if index .Includes "mapstructure"}}
-	Mapstructure *mapstructureinfra.Config `json:"mapstructure,omitempty" mapstructure:"mapstructure"`
-	{{- end}}
-	{{- if index .Includes "validator"}}
-	Validator *validatorinfra.Config `json:"validator,omitempty" mapstructure:"validator"`
-	{{- end}}
-	{{- if index .Includes "opentelemetry"}}
-	Opentelemetry *otelinfra.Config `json:"opentelemetry,omitempty" mapstructure:"opentelemetry"`
-	{{- end}}
+
+	{{- range $name, $m := .Meta }}
+	{{- if index $.Includes $name }}
+	{{$m.ConfigField}}
+	{{- end }}
+	{{- end }}
 }
 
 // LoadConfig loads configuration from a JSON file and binds environment variables.

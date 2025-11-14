@@ -425,6 +425,40 @@ func (s *GeneratorService) loadDepsMetadata() (map[string]DepMetadata, error) {
 	return metadata, nil
 }
 
+type DepMeta struct {
+	Imports     []string `json:"imports"`
+	ConfigField string   `json:"config_field"`
+}
+
+func (s *GeneratorService) loadConfigMetadata() (map[string]DepMeta, error) {
+	metaPath := filepath.Join("templates", "deps", "config_meta.json")
+	b, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config meta file: %w", err)
+	}
+
+	var meta map[string]DepMeta
+	if err := json.Unmarshal(b, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config meta: %w", err)
+	}
+
+	return meta, nil
+}
+
+func applyModuleName(meta map[string]DepMeta, moduleName string) map[string]DepMeta {
+	res := make(map[string]DepMeta)
+	for k, v := range meta {
+		newImports := make([]string, len(v.Imports))
+		for i, imp := range v.Imports {
+			newImports[i] = strings.ReplaceAll(imp, "{{.ModuleName}}", moduleName)
+		}
+		// Tạo bản copy với imports đã replace
+		v.Imports = newImports
+		res[k] = v
+	}
+	return res
+}
+
 // renderDepsPackage renders the deps package using metadata
 func (s *GeneratorService) renderDepsPackage(tmp string, req *GenerateRequest, includes map[string]bool) error {
 	// Load metadata
@@ -498,12 +532,22 @@ func (s *GeneratorService) renderDepsPackage(tmp string, req *GenerateRequest, i
 		}
 	}
 
+	// Load metadata
+	configMeta, err := s.loadConfigMetadata()
+	if err != nil {
+		return err
+	}
+
+	// Thay thế {{.ModuleName}} bằng moduleName thực tế
+	configMeta = applyModuleName(configMeta, req.ModuleName)
+
 	// Render config.go
 	configPath := filepath.Join(tmp, "internal/deps", "config.go")
 	configData := map[string]interface{}{
 		"ModuleName": req.ModuleName,
-		"Framework":  req.Framework,
 		"Includes":   includes,
+		"Framework":  req.Framework,
+		"Meta":       configMeta,
 	}
 	return s.renderTemplate("templates/deps/config.tmpl", configPath, configData)
 }
