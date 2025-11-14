@@ -1,0 +1,34 @@
+package deps
+
+import (
+	"os"
+
+	"github.com/sirupsen/logrus"
+	{{- if index .Includes "logrus"}}
+	logrusWrapper "{{.ModuleName}}/internal/infrastructure/logrus"
+	{{- end}}
+)
+
+// initLogger initializes the logger
+func initLogger(d *Deps, cfg *Config) error {
+	{{- $hasLogrus := index .Includes "logrus" }}
+	{{- if $hasLogrus }}
+	if cfg.Logrus != nil {
+		logger := logrusWrapper.New(*cfg.Logrus)
+		d.Log = logger.Logger
+	} else {
+		// Fallback to default logrus
+		d.Log = logrus.New()
+		d.Log.SetFormatter(&logrus.JSONFormatter{})
+		d.Log.SetLevel(logrus.InfoLevel)
+		d.Log.SetOutput(os.Stdout)
+	}
+	{{- else}}
+	// Use default logrus logger
+	d.Log = logrus.New()
+	d.Log.SetFormatter(&logrus.JSONFormatter{})
+	d.Log.SetLevel(logrus.InfoLevel)
+	d.Log.SetOutput(os.Stdout)
+	{{- end}}
+	return nil
+}

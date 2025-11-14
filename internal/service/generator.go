@@ -400,15 +400,102 @@ func (s *GeneratorService) renderMainFile(tmp string, req *GenerateRequest, incl
 	return s.renderTemplate("templates/cmd/main.tmpl", outPath, data)
 }
 
+// DepMetadata represents metadata for a dependency
+type DepMetadata struct {
+	Imports     []string `json:"imports"`
+	StructField string   `json:"struct_field"`
+	InitLines   []string `json:"init_lines"`
+	CloseLines  []string `json:"close_lines"`
+	HelperFiles []string `json:"helper_files"`
+}
+
+// loadDepsMetadata loads the deps metadata from JSON file
+func (s *GeneratorService) loadDepsMetadata() (map[string]DepMetadata, error) {
+	metaPath := filepath.Join("templates", "deps", "deps_meta.json")
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read deps metadata: %w", err)
+	}
+
+	var metadata map[string]DepMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse deps metadata: %w", err)
+	}
+
+	return metadata, nil
+}
+
+// renderDepsPackage renders the deps package using metadata
 func (s *GeneratorService) renderDepsPackage(tmp string, req *GenerateRequest, includes map[string]bool) error {
-	// Render deps.go
-	depsPath := filepath.Join(tmp, "internal/deps", "deps.go")
+	// Load metadata
+	depsMeta, err := s.loadDepsMetadata()
+	if err != nil {
+		return err
+	}
+
+	// Replace {{.ModuleName}} in imports and remove duplicates across all depsMeta
+	globalSeen := make(map[string]struct{})
+
+	for key, meta := range depsMeta {
+		uniqueImports := make([]string, 0, len(meta.Imports))
+		for _, imp := range meta.Imports {
+			imp = strings.ReplaceAll(imp, "{{.ModuleName}}", req.ModuleName)
+			if _, exists := globalSeen[imp]; !exists {
+				globalSeen[imp] = struct{}{}
+				uniqueImports = append(uniqueImports, imp)
+			}
+		}
+		meta.Imports = uniqueImports
+		depsMeta[key] = meta
+	}
+
+	// Create deps directory
+	depsDir := filepath.Join(tmp, "internal/deps")
+	if err := os.MkdirAll(depsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create deps directory: %w", err)
+	}
+
+	// Render main deps.go
+	depsPath := filepath.Join(depsDir, "deps.go")
 	data := map[string]interface{}{
 		"ModuleName": req.ModuleName,
 		"Includes":   includes,
+		"DepsMeta":   depsMeta,
 	}
+
 	if err := s.renderTemplate("templates/deps/deps.tmpl", depsPath, data); err != nil {
-		return err
+		return fmt.Errorf("failed to render deps.go: %w", err)
+	}
+
+	// Render helper files for each included dependency
+	for key, include := range includes {
+		if !include {
+			continue
+		}
+
+		meta, exists := depsMeta[key]
+		if !exists {
+			continue
+		}
+
+		// Render each helper file
+		for _, helperFile := range meta.HelperFiles {
+			templatePath := filepath.Join("templates", "deps", filepath.Base(helperFile))
+			outputPath := filepath.Join(depsDir, filepath.Base(helperFile))
+
+			// Remove .tmpl extension from output
+			outputPath = strings.TrimSuffix(outputPath, ".tmpl") + ".go"
+
+			helperData := map[string]interface{}{
+				"ModuleName": req.ModuleName,
+				"Key":        key,
+				"Includes":   includes,
+			}
+
+			if err := s.renderTemplate(templatePath, outputPath, helperData); err != nil {
+				return fmt.Errorf("failed to render %s: %w", helperFile, err)
+			}
+		}
 	}
 
 	// Render config.go

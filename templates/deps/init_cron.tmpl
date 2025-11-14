@@ -1,0 +1,26 @@
+package deps
+
+import (
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/cron"
+)
+
+// initCron initializes the Cron scheduler
+func initCron(d *Deps, cfg *Config) error {
+	cronCfg := cfg.Cron
+	if cronCfg == nil {
+		return fmt.Errorf("cron config is required")
+	}
+	scheduler, err := cron.New(*cronCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create cron scheduler: %w", err)
+	}
+
+	// Start the scheduler
+	scheduler.Start()
+
+	d.Cron = scheduler
+	d.Log.Info("Cron scheduler initialized successfully")
+	return nil
+}

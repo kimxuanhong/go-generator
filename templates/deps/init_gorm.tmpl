@@ -1,0 +1,24 @@
+package deps
+
+import (
+	"fmt"
+
+	gormcfg "{{.ModuleName}}/internal/infrastructure/gorm"
+)
+
+// initGorm initializes a generic GORM connection
+func initGorm(d *Deps, cfg *Config) error {
+	gormConfig := cfg.Gorm
+	if gormConfig == nil {
+		return fmt.Errorf("gorm config is required")
+	}
+	db, err := gormcfg.New(*gormConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect gorm: %w", err)
+	}
+	d.Gorm = db
+	if d.Log != nil {
+		d.Log.Info("GORM initialized successfully")
+	}
+	return nil
+}

@@ -1,0 +1,23 @@
+package deps
+
+import (
+	"context"
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/redis"
+)
+
+// initRedis initializes the Redis client
+func initRedis(d *Deps, cfg *Config) error {
+	redisCfg := cfg.Redis
+	if redisCfg == nil {
+		return fmt.Errorf("redis config is required")
+	}
+	client := redis.New(*redisCfg)
+	if err := client.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping redis: %w", err)
+	}
+	d.Redis = client
+	d.Log.Info("Redis initialized successfully")
+	return nil
+}

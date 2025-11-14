@@ -1,0 +1,19 @@
+package deps
+
+import (
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/resty"
+)
+
+// initResty initializes the Resty HTTP client
+func initResty(d *Deps, cfg *Config) error {
+	restyCfg := cfg.Resty
+	if restyCfg == nil {
+		return fmt.Errorf("resty config is required")
+	}
+	client := resty.New(*restyCfg)
+	d.Resty = client
+	d.Log.Info("Resty initialized successfully")
+	return nil
+}

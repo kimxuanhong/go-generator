@@ -1,0 +1,25 @@
+package deps
+
+import (
+	"context"
+	"fmt"
+
+	otelinfra "{{.ModuleName}}/internal/infrastructure/opentelemetry"
+)
+
+// initOpenTelemetry initializes the OpenTelemetry provider
+func initOpenTelemetry(d *Deps, cfg *Config) error {
+	otelConfig := cfg.Opentelemetry
+	if otelConfig == nil {
+		return fmt.Errorf("opentelemetry config is required")
+	}
+	provider, err := otelinfra.New(context.Background(), *otelConfig)
+	if err != nil {
+		return fmt.Errorf("failed to initialize opentelemetry: %w", err)
+	}
+	d.Tracer = provider
+	if d.Log != nil {
+		d.Log.Info("OpenTelemetry initialized successfully")
+	}
+	return nil
+}
