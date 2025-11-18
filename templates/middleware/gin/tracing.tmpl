@@ -1,0 +1,40 @@
+package middleware
+
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+)
+
+const (
+	// Header names for tracing
+	TraceIDHeader   = "X-Trace-ID"
+	RequestIDHeader = "X-Request-ID"
+)
+
+// TracingMiddleware adds distributed tracing support
+func TracingMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get or generate trace ID
+		traceID := c.GetHeader(TraceIDHeader)
+		if traceID == "" {
+			traceID = uuid.New().String()
+		}
+
+		// Get or generate request ID
+		requestID := c.GetHeader(RequestIDHeader)
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+
+		// Set in context for handlers to use
+		c.Set("trace_id", traceID)
+		c.Set("request_id", requestID)
+
+		// Add to response headers
+		c.Header(TraceIDHeader, traceID)
+		c.Header(RequestIDHeader, requestID)
+
+		c.Next()
+	}
+}
+

@@ -1,0 +1,18 @@
+package deps
+
+import (
+	mapstructureinfra "{{.ModuleName}}/internal/infrastructure/mapstructure"
+)
+
+// initMapstructure initializes the decoder factory
+func initMapstructure(d *Deps, cfg *Config) error {
+	msConfig := cfg.Mapstructure
+	if msConfig == nil {
+		msConfig = &mapstructureinfra.Config{}
+	}
+	d.Mapper = mapstructureinfra.NewFactory(*msConfig)
+	if d.Log != nil {
+		d.Log.Info("Mapstructure decoder factory initialized")
+	}
+	return nil
+}

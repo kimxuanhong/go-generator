@@ -3,47 +3,15 @@ package deps
 import (
 	"fmt"
 	"strings"
-	{{- if index .Includes "redis"}}
-	"{{.ModuleName}}/internal/infrastructure/redis"
-	{{- end}}
-	{{- if index .Includes "postgres"}}
-	"{{.ModuleName}}/internal/infrastructure/postgres"
-	{{- end}}
-	{{- if index .Includes "mysql"}}
-	"{{.ModuleName}}/internal/infrastructure/mysql"
-	{{- end}}
-	{{- if index .Includes "logrus"}}
-	"{{.ModuleName}}/internal/infrastructure/logrus"
-	{{- end}}
-	{{- if index .Includes "resty"}}
-	"{{.ModuleName}}/internal/infrastructure/resty"
-	{{- end}}
-	{{- if index .Includes "cron"}}
-	"{{.ModuleName}}/internal/infrastructure/cron"
-	{{- end}}
-	{{- if index .Includes "rabbitmq"}}
-	"{{.ModuleName}}/internal/infrastructure/rabbitmq"
-	{{- end}}
-	{{- if index .Includes "kafka"}}
-	kafkainfra "{{.ModuleName}}/internal/infrastructure/kafka"
-	{{- end}}
-	{{- if index .Includes "activemq"}}
-	activemqinfra "{{.ModuleName}}/internal/infrastructure/activemq"
-	{{- end}}
-	{{- if index .Includes "gorm"}}
-	gormcfg "{{.ModuleName}}/internal/infrastructure/gorm"
-	{{- end}}
-	{{- if index .Includes "mapstructure"}}
-	mapstructureinfra "{{.ModuleName}}/internal/infrastructure/mapstructure"
-	{{- end}}
-	{{- if index .Includes "validator"}}
-	validatorinfra "{{.ModuleName}}/internal/infrastructure/validator"
-	{{- end}}
-	{{- if index .Includes "opentelemetry"}}
-	otelinfra "{{.ModuleName}}/internal/infrastructure/opentelemetry"
-	{{- end}}
+	{{- range $name, $m := .Meta }}
+    {{- if index $.Includes $name }}
+    {{- range $imp := $m.Imports }}
+    {{$imp}}
+    {{- end }}
+    {{- end }}
+    {{- end }}
 
-	mapstructure "github.com/mitchellh/mapstructure"
+    mapstructure "github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
@@ -59,6 +27,27 @@ type FiberConfig struct {
 func (c *FiberConfig) GetAddr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
+
+// Validate validates FiberConfig values
+func (c *FiberConfig) Validate() error {
+	if c.Host == "" {
+		return fmt.Errorf("fiber host is required")
+	}
+	if c.Port <= 0 || c.Port > 65535 {
+		return fmt.Errorf("fiber port must be between 1 and 65535, got %d", c.Port)
+	}
+	return nil
+}
+
+// SetDefaults sets default values for FiberConfig
+func (c *FiberConfig) SetDefaults() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+}
 {{- else if eq .Framework "gin"}}
 // GinConfig holds Gin server configuration
 type GinConfig struct {
@@ -70,6 +59,33 @@ type GinConfig struct {
 // GetAddr returns the address string for Gin server
 func (c *GinConfig) GetAddr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+// Validate validates GinConfig values
+func (c *GinConfig) Validate() error {
+	if c.Host == "" {
+		return fmt.Errorf("gin host is required")
+	}
+	if c.Port <= 0 || c.Port > 65535 {
+		return fmt.Errorf("gin port must be between 1 and 65535, got %d", c.Port)
+	}
+	if c.Mode != "" && c.Mode != "debug" && c.Mode != "release" && c.Mode != "test" {
+		return fmt.Errorf("gin mode must be one of: debug, release, test, got %s", c.Mode)
+	}
+	return nil
+}
+
+// SetDefaults sets default values for GinConfig
+func (c *GinConfig) SetDefaults() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+	if c.Mode == "" {
+		c.Mode = "debug"
+	}
 }
 {{- else if eq .Framework "echo"}}
 // EchoConfig holds Echo server configuration
@@ -83,10 +99,38 @@ type EchoConfig struct {
 func (c *EchoConfig) GetAddr() string {
 	return fmt.Sprintf("%s:%d", c.Host, c.Port)
 }
+
+// Validate validates EchoConfig values
+func (c *EchoConfig) Validate() error {
+	if c.Host == "" {
+		return fmt.Errorf("echo host is required")
+	}
+	if c.Port <= 0 || c.Port > 65535 {
+		return fmt.Errorf("echo port must be between 1 and 65535, got %d", c.Port)
+	}
+	return nil
+}
+
+// SetDefaults sets default values for EchoConfig
+func (c *EchoConfig) SetDefaults() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+}
 {{- end}}
+
+// LogConfig holds logging configuration
+type LogConfig struct {
+	Level string `json:"level" mapstructure:"level"` // debug, info, warn, error, fatal, panic
+}
 
 // Config holds the application configuration
 type Config struct {
+	Log *LogConfig `json:"log,omitempty" mapstructure:"log"`
+
 	{{- if eq .Framework "fiber"}}
 	Fiber *FiberConfig `json:"fiber,omitempty" mapstructure:"fiber"`
 	{{- else if eq .Framework "gin"}}
@@ -94,45 +138,12 @@ type Config struct {
 	{{- else if eq .Framework "echo"}}
 	Echo *EchoConfig `json:"echo,omitempty" mapstructure:"echo"`
 	{{- end}}
-	{{- if index .Includes "redis"}}
-	Redis *redis.Config `json:"redis,omitempty" mapstructure:"redis"`
-	{{- end}}
-	{{- if index .Includes "postgres"}}
-	Postgres *postgres.Config `json:"postgres,omitempty" mapstructure:"postgres"`
-	{{- end}}
-	{{- if index .Includes "mysql"}}
-	MySQL *mysql.Config `json:"mysql,omitempty" mapstructure:"mysql"`
-	{{- end}}
-	{{- if index .Includes "logrus"}}
-	Logrus *logrus.Config `json:"logrus,omitempty" mapstructure:"logrus"`
-	{{- end}}
-	{{- if index .Includes "resty"}}
-	Resty *resty.Config `json:"resty,omitempty" mapstructure:"resty"`
-	{{- end}}
-	{{- if index .Includes "cron"}}
-	Cron *cron.Config `json:"cron,omitempty" mapstructure:"cron"`
-	{{- end}}
-	{{- if index .Includes "rabbitmq"}}
-	RabbitMQ *rabbitmq.Config `json:"rabbitmq,omitempty" mapstructure:"rabbitmq"`
-	{{- end}}
-	{{- if index .Includes "kafka"}}
-	Kafka *kafkainfra.Config `json:"kafka,omitempty" mapstructure:"kafka"`
-	{{- end}}
-	{{- if index .Includes "activemq"}}
-	ActiveMQ *activemqinfra.Config `json:"activemq,omitempty" mapstructure:"activemq"`
-	{{- end}}
-	{{- if index .Includes "gorm"}}
-	Gorm *gormcfg.Config `json:"gorm,omitempty" mapstructure:"gorm"`
-	{{- end}}
-	{{- if index .Includes "mapstructure"}}
-	Mapstructure *mapstructureinfra.Config `json:"mapstructure,omitempty" mapstructure:"mapstructure"`
-	{{- end}}
-	{{- if index .Includes "validator"}}
-	Validator *validatorinfra.Config `json:"validator,omitempty" mapstructure:"validator"`
-	{{- end}}
-	{{- if index .Includes "opentelemetry"}}
-	Opentelemetry *otelinfra.Config `json:"opentelemetry,omitempty" mapstructure:"opentelemetry"`
-	{{- end}}
+
+	{{- range $name, $m := .Meta }}
+	{{- if index $.Includes $name }}
+	{{$m.ConfigField}}
+	{{- end }}
+	{{- end }}
 }
 
 // LoadConfig loads configuration from a JSON file and binds environment variables.
@@ -170,6 +181,14 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Set defaults before validation
+	cfg.SetDefaults()
+
+	// Validate config
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
 	return &cfg, nil
 }
 
@@ -196,4 +215,63 @@ func bindEnvs(v *viper.Viper, settings map[string]interface{}, prefix string) er
 		}
 	}
 	return nil
+}
+
+// Validate validates the configuration
+func (c *Config) Validate() error {
+	{{- if eq .Framework "fiber"}}
+	if c.Fiber != nil {
+		if err := c.Fiber.Validate(); err != nil {
+			return fmt.Errorf("fiber config: %w", err)
+		}
+	} else {
+		return fmt.Errorf("fiber config is required")
+	}
+	{{- else if eq .Framework "gin"}}
+	if c.Gin != nil {
+		if err := c.Gin.Validate(); err != nil {
+			return fmt.Errorf("gin config: %w", err)
+		}
+	} else {
+		return fmt.Errorf("gin config is required")
+	}
+	{{- else if eq .Framework "echo"}}
+	if c.Echo != nil {
+		if err := c.Echo.Validate(); err != nil {
+			return fmt.Errorf("echo config: %w", err)
+		}
+	} else {
+		return fmt.Errorf("echo config is required")
+	}
+	{{- end}}
+
+	// Validate library configs
+	{{- range $name, $m := .Meta }}
+	{{- if index $.Includes $name }}
+	// Note: Library-specific validation would be added here if needed
+	// For now, we rely on the library's own validation during initialization
+	{{- end }}
+	{{- end }}
+
+	return nil
+}
+
+// SetDefaults sets default values for the configuration
+func (c *Config) SetDefaults() {
+	{{- if eq .Framework "fiber"}}
+	if c.Fiber != nil {
+		c.Fiber.SetDefaults()
+	}
+	{{- else if eq .Framework "gin"}}
+	if c.Gin != nil {
+		c.Gin.SetDefaults()
+	}
+	{{- else if eq .Framework "echo"}}
+	if c.Echo != nil {
+		c.Echo.SetDefaults()
+	}
+	{{- end }}
+
+	// Set defaults for library configs if needed
+	// Library-specific defaults would be set here
 }

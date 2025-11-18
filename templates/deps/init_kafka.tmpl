@@ -1,0 +1,24 @@
+package deps
+
+import (
+	"fmt"
+
+	kafkainfra "{{.ModuleName}}/internal/infrastructure/kafka"
+)
+
+// initKafka initializes the Kafka client
+func initKafka(d *Deps, cfg *Config) error {
+	kCfg := cfg.Kafka
+	if kCfg == nil {
+		return fmt.Errorf("kafka config is required")
+	}
+	client, err := kafkainfra.New(*kCfg)
+	if err != nil {
+		return fmt.Errorf("failed to init kafka: %w", err)
+	}
+	d.Kafka = client
+	if d.Log != nil {
+		d.Log.Info("Kafka initialized successfully")
+	}
+	return nil
+}

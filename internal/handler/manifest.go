@@ -1,43 +1,46 @@
 package handler
 
 import (
-	"encoding/json"
-	"log"
 	"net/http"
 
+	"github.com/sirupsen/logrus"
+	"github.com/xhkzeroone/go-generator/internal/constants"
 	"github.com/xhkzeroone/go-generator/internal/service"
 )
 
 type ManifestHandler struct {
+	*BaseHandler
 	service *service.GeneratorService
 }
 
-func NewManifestHandler(svc *service.GeneratorService) *ManifestHandler {
-	return &ManifestHandler{service: svc}
+func NewManifestHandler(svc *service.GeneratorService, logger *logrus.Logger) *ManifestHandler {
+	return &ManifestHandler{
+		BaseHandler: NewBaseHandler(logger),
+		service:     svc,
+	}
 }
 
+// HandleManifest godoc
+// @Summary Get generator manifest
+// @Description Returns the manifest describing available frameworks and libraries.
+// @Tags manifest
+// @Produce json
+// @Success 200 {object} models.Manifest
+// @Failure 405 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /manifest [get]
 func (h *ManifestHandler) HandleManifest(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		h.writeError(w, "Only GET method allowed", http.StatusMethodNotAllowed)
+	if !h.validateMethod(r, constants.MethodGET) {
+		h.writeError(w, constants.ErrMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
 	manifest := h.service.GetManifest()
+	manifestData := manifest
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
+	w.Header().Set(constants.HeaderCacheControl, constants.NoCache)
+	w.Header().Set(constants.HeaderPragma, "no-cache")
+	w.Header().Set(constants.HeaderExpires, "0")
 
-	if err := json.NewEncoder(w).Encode(manifest); err != nil {
-		log.Printf("Error encoding manifest: %v", err)
-		h.writeError(w, "Failed to encode manifest: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (h *ManifestHandler) writeError(w http.ResponseWriter, message string, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]string{"error": message})
+	h.writeJSON(w, http.StatusOK, manifestData)
 }

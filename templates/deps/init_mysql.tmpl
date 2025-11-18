@@ -1,0 +1,26 @@
+package deps
+
+import (
+	"context"
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/mysql"
+)
+
+// initMySQL initializes the MySQL database connection
+func initMySQL(d *Deps, cfg *Config) error {
+	mysqlCfg := cfg.MySQL
+	if mysqlCfg == nil {
+		return fmt.Errorf("mysql config is required")
+	}
+	db, err := mysql.New(*mysqlCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect mysql: %w", err)
+	}
+	if err := db.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping mysql: %w", err)
+	}
+	d.DB = db
+	d.Log.Info("MySQL initialized successfully")
+	return nil
+}

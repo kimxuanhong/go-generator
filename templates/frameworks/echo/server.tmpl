@@ -2,15 +2,19 @@ package app
 
 import (
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"github.com/labstack/echo/v4"
+	echoMiddleware "github.com/labstack/echo/v4/middleware"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/middleware"
 )
 
 // Start starts the Echo HTTP server
-func Start(cfg *deps.Config) error {
+func Start(cfg *deps.Config, d *deps.Deps) error {
 	if cfg.Echo == nil {
 		return fmt.Errorf("echo config is required")
 	}
@@ -19,6 +23,21 @@ func Start(cfg *deps.Config) error {
 
 	// Set debug mode
 	e.Debug = cfg.Echo.Debug
+
+	// Recovery middleware
+	e.Use(echoMiddleware.Recover())
+
+	// Apply custom middleware
+	// Order: tracing -> logging -> rate limit
+	e.Use(middleware.TracingMiddleware())
+	e.Use(middleware.LoggingMiddleware(d.Log))
+
+	// Rate limiter: 100 requests per minute per IP
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	e.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
@@ -33,7 +52,7 @@ func Start(cfg *deps.Config) error {
 	})
 
 	addr := cfg.Echo.GetAddr()
-	log.Printf("Starting Echo server on %s", addr)
+	d.Log.Infof("Starting Echo server on %s", addr)
 	if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("failed to start echo server: %w", err)
 	}

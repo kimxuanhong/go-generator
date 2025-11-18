@@ -1,0 +1,24 @@
+package deps
+
+import (
+	"fmt"
+
+	activemqinfra "{{.ModuleName}}/internal/infrastructure/activemq"
+)
+
+// initActiveMQ initializes the ActiveMQ client
+func initActiveMQ(d *Deps, cfg *Config) error {
+	aCfg := cfg.ActiveMQ
+	if aCfg == nil {
+		return fmt.Errorf("activemq config is required")
+	}
+	client, err := activemqinfra.New(*aCfg)
+	if err != nil {
+		return fmt.Errorf("failed to init activemq: %w", err)
+	}
+	d.ActiveMQ = client
+	if d.Log != nil {
+		d.Log.Info("ActiveMQ initialized successfully")
+	}
+	return nil
+}

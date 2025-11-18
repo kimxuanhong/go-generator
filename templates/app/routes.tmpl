@@ -20,6 +20,7 @@ func RegisterRoutes(s *Server, userHandler *handler.UserHandler) {
     {{- if eq .Framework "fiber"}}
     api := s.app.Group("/api/v1")
     api.Get("/users/:id", userHandler.GetUser)
+    api.Post("/users", userHandler.CreateUser)
 
     // Health check
     s.app.Get("/health", func(c *fiber.Ctx) error {
@@ -28,6 +29,7 @@ func RegisterRoutes(s *Server, userHandler *handler.UserHandler) {
     {{- else if eq .Framework "gin"}}
     api := s.router.Group("/api/v1")
     api.GET("/users/:id", userHandler.GetUser)
+    api.POST("/users", userHandler.CreateUser)
 
     // Health check
     s.router.GET("/health", func(c *gin.Context) {
@@ -36,6 +38,7 @@ func RegisterRoutes(s *Server, userHandler *handler.UserHandler) {
     {{- else if eq .Framework "echo"}}
     api := s.echo.Group("/api/v1")
     api.GET("/users/:id", userHandler.GetUser)
+    api.POST("/users", userHandler.CreateUser)
 
     // Health check
     s.echo.GET("/health", func(c echo.Context) error {

@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"context"
+	"log"
 	"time"
 
 	{{- if index .Includes "redis"}}
@@ -44,21 +46,45 @@ func NewExampleJob({{- if index .Includes "redis"}}redis *redis.Client{{- end}}{
 
 // Run executes the job (implements cron.Job interface)
 func (j *ExampleJob) Run() {
-	// Example job logic
-	// This is a placeholder - implement your actual job logic here
-	_ = time.Now()
+	// Create context with timeout for job execution
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	
+	log.Printf("Example job starting at %v", time.Now())
+	
 	{{- if index .Includes "redis"}}
-	// Example: Use Redis
-	_ = j.redis
+	// Example: Use Redis with context
+	if j.redis != nil {
+		client := j.redis.Client()
+		if err := client.Ping(ctx).Err(); err == nil {
+			log.Println("  - Redis client is available and connected")
+		} else {
+			log.Printf("  - Redis ping failed: %v", err)
+		}
+	}
 	{{- end}}
 	{{- if index .Includes "postgres"}}
-	// Example: Use DB (Postgres)
-	_ = j.DB
+	// Example: Use DB (Postgres) with context
+	if j.DB != nil {
+		db := j.DB.GORM()
+		if err := db.WithContext(ctx).Exec("SELECT 1").Error; err == nil {
+			log.Println("  - Postgres database is accessible")
+		} else {
+			log.Printf("  - Postgres query failed: %v", err)
+		}
+	}
 	{{- end}}
 	{{- if index .Includes "mysql"}}
-	// Example: Use DB (MySQL)
-	_ = j.DB
+	// Example: Use DB (MySQL) with context
+	if j.DB != nil {
+		db := j.DB.GORM()
+		if err := db.WithContext(ctx).Exec("SELECT 1").Error; err == nil {
+			log.Println("  - MySQL database is accessible")
+		} else {
+			log.Printf("  - MySQL query failed: %v", err)
+		}
+	}
 	{{- end}}
-	// Log job execution
-	// In real implementation, you would use a logger here
+	
+	log.Println("Example job completed successfully")
 }

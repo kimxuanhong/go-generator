@@ -2,15 +2,19 @@ package app
 
 import (
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/gin-gonic/gin"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/middleware"
 )
 
 // Start starts the Gin HTTP server
-func Start(cfg *deps.Config) error {
+func Start(cfg *deps.Config, d *deps.Deps) error {
 	if cfg.Gin == nil {
 		return fmt.Errorf("gin config is required")
 	}
@@ -20,9 +24,25 @@ func Start(cfg *deps.Config) error {
 		gin.SetMode(cfg.Gin.Mode)
 	}
 
-	r := gin.Default()
+	// Create router without default middleware (we'll add our own)
+	r := gin.New()
 
-	// Health check endpoint
+	// Recovery middleware
+	r.Use(gin.Recovery())
+
+	// Apply custom middleware
+	// Order: tracing -> logging -> rate limit
+	r.Use(middleware.TracingMiddleware())
+	r.Use(middleware.LoggingMiddleware(d.Log))
+
+	// Rate limiter: 100 requests per minute per IP
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	r.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Health check endpoint (no rate limit needed)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -35,7 +55,7 @@ func Start(cfg *deps.Config) error {
 	})
 
 	addr := cfg.Gin.GetAddr()
-	log.Printf("Starting Gin server on %s", addr)
+	d.Log.Infof("Starting Gin server on %s", addr)
 	if err := r.Run(addr); err != nil {
 		return fmt.Errorf("failed to start gin server: %w", err)
 	}

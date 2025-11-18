@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/sirupsen/logrus"
 	{{- if eq .Framework "fiber"}}
 	"github.com/gofiber/fiber/v2"
 	{{- else if eq .Framework "gin"}}
@@ -14,79 +15,472 @@ import (
 	{{- end}}
 	"strconv"
 
+	"{{.ModuleName}}/internal/domain"
+	"{{.ModuleName}}/internal/errors"
 	"{{.ModuleName}}/internal/usecase"
+	{{- if index .Includes "opentelemetry"}}
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	{{- end}}
 )
 
 // UserHandler handles user HTTP requests
 type UserHandler struct {
 	userUsecase *usecase.UserUsecase
+	{{- if index .Includes "opentelemetry"}}
+	tracer      trace.Tracer
+	{{- end}}
+	{{- if index .Includes "validator"}}
+	validator   interface{ Struct(interface{}) error }
+	{{- end}}
+	log         *logrus.Logger
+}
+
+// DTOs (Data Transfer Objects) for handler layer
+
+// UserResponse is the response representation exposed via Swagger docs.
+type UserResponse = domain.User
+
+// CreateUserRequest represents the request body for creating a user
+type CreateUserRequest struct {
+	Name  string `json:"name" validate:"required,min=2,max=100" example:"John Doe"`
+	Email string `json:"email" validate:"required,email" example:"john@example.com"`
+}
+
+// ToUser converts CreateUserRequest DTO to domain.User entity
+func (r *CreateUserRequest) ToUser() *domain.User {
+	return &domain.User{
+		Name:  r.Name,
+		Email: r.Email,
+	}
+}
+
+// UpdateUserRequest represents the request body for updating a user
+type UpdateUserRequest struct {
+	Name  string `json:"name,omitempty" validate:"omitempty,min=2,max=100" example:"John Doe"`
+	Email string `json:"email,omitempty" validate:"omitempty,email" example:"john@example.com"`
+}
+
+// ApplyTo applies updates from DTO to domain entity
+func (r *UpdateUserRequest) ApplyTo(user *domain.User) {
+	if r.Name != "" {
+		user.Name = r.Name
+	}
+	if r.Email != "" {
+		user.Email = r.Email
+	}
+}
+
+
+// ErrorResponse represents a standard error payload returned to clients.
+type ErrorResponse struct {
+	Code    string                 `json:"code"`              // Application error code
+	Message string                 `json:"message"`           // User-facing error message
+	Context map[string]interface{} `json:"context,omitempty"` // Additional context (only in debug mode)
+}
+
+// NewErrorResponse creates an ErrorResponse from an AppError
+func NewErrorResponse(err *errors.AppError, includeContext bool) ErrorResponse {
+	resp := ErrorResponse{
+		Code:    string(err.Code),
+		Message: err.Message,
+	}
+	// Only include context in development/debug mode
+	if includeContext && len(err.Context) > 0 {
+		resp.Context = err.Context
+	}
+	return resp
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userUsecase *usecase.UserUsecase) *UserHandler {
+func NewUserHandler(userUsecase *usecase.UserUsecase{{- if index .Includes "opentelemetry"}}, tracer trace.Tracer{{- end}}{{- if index .Includes "validator"}}, validator interface{ Struct(interface{}) error }{{- end}}, log *logrus.Logger) *UserHandler {
 	return &UserHandler{
 		userUsecase: userUsecase,
+		{{- if index .Includes "opentelemetry"}}
+		tracer:      tracer,
+		{{- end}}
+		{{- if index .Includes "validator"}}
+		validator:   validator,
+		{{- end}}
+		log:         log,
 	}
 }
 
 {{- if eq .Framework "fiber"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *fiber.Ctx) error {
+	ctx := c.Context()
+	h.log.Debug("GET /users/:id request received")
+	
+	{{- if index .Includes "opentelemetry"}}
+	// Start OpenTelemetry span for tracing
+	ctx, span := h.tracer.Start(ctx, "handler.GetUser")
+	defer span.End()
+	{{- end}}
+	
 	id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid user id",
-		})
+		h.log.WithError(err).Warn("Invalid user ID format in request")
+		appErr := errors.ValidationError("Invalid user ID format")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid user id")
+		{{- end}}
+		return c.Status(appErr.HTTPStatus).JSON(NewErrorResponse(appErr, false))
 	}
 
-	user, err := h.userUsecase.GetUser(id)
+	h.log.WithField("user_id", id).Info("Fetching user")
+	{{- if index .Includes "opentelemetry"}}
+	// Add user_id as span attribute for better observability
+	span.SetAttributes(attribute.Int64("user.id", id))
+	{{- end}}
+
+	user, err := h.userUsecase.GetUser(ctx, id)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		h.log.WithError(err).WithField("user_id", id).Error("Failed to get user")
+		// Check if it's an AppError, otherwise wrap it
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to retrieve user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		return c.Status(appErr.HTTPStatus).JSON(NewErrorResponse(appErr, false))
 	}
 
+	h.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("User retrieved successfully")
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "success")
+	{{- end}}
 	return c.JSON(user)
 }
+
+
+// CreateUser godoc
+// @Summary Create a new user
+// @Description Creates a new user with validation
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body CreateUserRequest true "User creation request"
+// @Success 201 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users [post]
+func (h *UserHandler) CreateUser(c *fiber.Ctx) error {
+	ctx := c.Context()
+	
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := h.tracer.Start(ctx, "handler.CreateUser")
+	defer span.End()
+	{{- end}}
+	
+	var req CreateUserRequest
+	if err := c.BodyParser(&req); err != nil {
+		appErr := errors.BadRequest("Invalid request body")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid request body")
+		{{- end}}
+		return c.Status(appErr.HTTPStatus).JSON(NewErrorResponse(appErr, false))
+	}
+
+	{{- if index .Includes "validator"}}
+	// Validate request
+	if err := h.validator.Struct(&req); err != nil {
+		appErr := errors.ValidationError(err.Error())
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "validation failed")
+		{{- end}}
+		return c.Status(appErr.HTTPStatus).JSON(NewErrorResponse(appErr, false))
+	}
+	{{- end}}
+	
+	{{- if index .Includes "opentelemetry"}}
+	span.SetAttributes(attribute.String("user.email", req.Email))
+	{{- end}}
+	
+	user := req.ToUser()
+	if err := h.userUsecase.CreateUser(ctx, user); err != nil {
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to create user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		return c.Status(appErr.HTTPStatus).JSON(NewErrorResponse(appErr, false))
+	}
+	
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user created")
+	span.SetAttributes(attribute.Int64("user.id", user.ID))
+	{{- end}}
+	return c.Status(fiber.StatusCreated).JSON(user)
+}
+
 {{- else if eq .Framework "gin"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	
+	{{- if index .Includes "opentelemetry"}}
+	// Start OpenTelemetry span for tracing
+	ctx, span := h.tracer.Start(ctx, "handler.GetUser")
+	defer span.End()
+	{{- end}}
+	
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid user id",
-		})
+		appErr := errors.ValidationError("Invalid user ID format")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid user id")
+		{{- end}}
+		c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
 		return
 	}
 
-	user, err := h.userUsecase.GetUser(id)
+	{{- if index .Includes "opentelemetry"}}
+	// Add user_id as span attribute for better observability
+	span.SetAttributes(attribute.Int64("user.id", id))
+	{{- end}}
+
+	user, err := h.userUsecase.GetUser(ctx, id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		// Check if it's an AppError, otherwise wrap it
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to retrieve user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
 		return
 	}
 
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "success")
+	{{- end}}
 	c.JSON(http.StatusOK, user)
 }
+
+
+// CreateUser godoc
+// @Summary Create a new user
+// @Description Creates a new user with validation
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body CreateUserRequest true "User creation request"
+// @Success 201 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users [post]
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := h.tracer.Start(ctx, "handler.CreateUser")
+	defer span.End()
+	{{- end}}
+	
+	var req CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		appErr := errors.BadRequest("Invalid request body")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid request body")
+		{{- end}}
+		c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+		return
+	}
+
+	{{- if index .Includes "validator"}}
+	// Validate request
+	if err := h.validator.Struct(&req); err != nil {
+		appErr := errors.ValidationError(err.Error())
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "validation failed")
+		{{- end}}
+		c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+		return
+	}
+	{{- end}}
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetAttributes(attribute.String("user.email", req.Email))
+	{{- end}}
+	
+	user := req.ToUser()
+	if err := h.userUsecase.CreateUser(ctx, user); err != nil {
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to create user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+		return
+	}
+	
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user created")
+	span.SetAttributes(attribute.Int64("user.id", user.ID))
+	{{- end}}
+	c.JSON(http.StatusCreated, user)
+}
+
 {{- else if eq .Framework "echo"}}
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier.
+// @Tags users
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users/{id} [get]
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c echo.Context) error {
+	ctx := c.Request().Context()
+	
+	{{- if index .Includes "opentelemetry"}}
+	// Start OpenTelemetry span for tracing
+	ctx, span := h.tracer.Start(ctx, "handler.GetUser")
+	defer span.End()
+	{{- end}}
+	
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error": "invalid user id",
-		})
+		appErr := errors.ValidationError("Invalid user ID format")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid user id")
+		{{- end}}
+		return c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
 	}
 
-	user, err := h.userUsecase.GetUser(id)
+	{{- if index .Includes "opentelemetry"}}
+	// Add user_id as span attribute for better observability
+	span.SetAttributes(attribute.Int64("user.id", id))
+	{{- end}}
+
+	user, err := h.userUsecase.GetUser(ctx, id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{
-			"error": err.Error(),
-		})
+		// Check if it's an AppError, otherwise wrap it
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to retrieve user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		return c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
 	}
 
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "success")
+	{{- end}}
 	return c.JSON(http.StatusOK, user)
+}
+
+
+// CreateUser godoc
+// @Summary Create a new user
+// @Description Creates a new user with validation
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body CreateUserRequest true "User creation request"
+// @Success 201 {object} UserResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/users [post]
+func (h *UserHandler) CreateUser(c echo.Context) error {
+	ctx := c.Request().Context()
+	
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := h.tracer.Start(ctx, "handler.CreateUser")
+	defer span.End()
+	{{- end}}
+	
+	var req CreateUserRequest
+	if err := c.Bind(&req); err != nil {
+		appErr := errors.BadRequest("Invalid request body")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "invalid request body")
+		{{- end}}
+		return c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+	}
+
+	{{- if index .Includes "validator"}}
+	// Validate request
+	if err := h.validator.Struct(&req); err != nil {
+		appErr := errors.ValidationError(err.Error())
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "validation failed")
+		{{- end}}
+		return c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+	}
+	{{- end}}
+	
+	{{- if index .Includes "opentelemetry"}}
+	span.SetAttributes(attribute.String("user.email", req.Email))
+	{{- end}}
+	
+	user := req.ToUser()
+	if err := h.userUsecase.CreateUser(ctx, user); err != nil {
+		appErr, ok := errors.IsAppError(err)
+		if !ok {
+			appErr = errors.Internal("Failed to create user", err)
+		}
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, appErr.Message)
+		{{- end}}
+		return c.JSON(appErr.HTTPStatus, NewErrorResponse(appErr, false))
+	}
+	
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user created")
+	span.SetAttributes(attribute.Int64("user.id", user.ID))
+	{{- end}}
+	return c.JSON(http.StatusCreated, user)
 }
 {{- end}}
 

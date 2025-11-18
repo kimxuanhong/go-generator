@@ -1,6 +1,7 @@
 package models
 
 type Manifest struct {
+	Version    string                  `json:"version"`
 	Libs       map[string]LibDef       `json:"libs"`
 	Frameworks map[string]FrameworkDef `json:"frameworks"`
 }

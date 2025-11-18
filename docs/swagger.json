@@ -1,0 +1,251 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "API endpoints for generating Go project scaffolding.",
+        "title": "Go Generator API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/generate": {
+            "post": {
+                "description": "Generates a Go project scaffold based on the provided configuration and returns it as a ZIP archive.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/zip"
+                ],
+                "tags": [
+                    "generator"
+                ],
+                "summary": "Generate a Go project scaffold",
+                "parameters": [
+                    {
+                        "description": "Generator configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/service.GenerateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Generated project archive",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns the health status of the generator service.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Check service health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handler.HealthResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/manifest": {
+            "get": {
+                "description": "Returns the manifest describing available frameworks and libraries.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "manifest"
+                ],
+                "summary": "Get generator manifest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Manifest"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handler.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.HealthResponse": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.FrameworkDef": {
+            "type": "object",
+            "properties": {
+                "config_section": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "e.g., \"Gin\", \"Echo\"",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "e.g., \"🍸\", \"🔊\"",
+                    "type": "string"
+                },
+                "imports": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "templates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.LibDef": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "description": "e.g., \"database\", \"caching\", \"utilities\"",
+                    "type": "string"
+                },
+                "config_section": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "e.g., \"PostgreSQL\", \"Redis\"",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "e.g., \"🐘\", \"🔴\"",
+                    "type": "string"
+                },
+                "imports": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_radio": {
+                    "description": "true for radio (mutually exclusive), false for checkbox",
+                    "type": "boolean"
+                },
+                "templates": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.Manifest": {
+            "type": "object",
+            "properties": {
+                "frameworks": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/models.FrameworkDef"
+                    }
+                },
+                "libs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/models.LibDef"
+                    }
+                }
+            }
+        },
+        "service.GenerateRequest": {
+            "type": "object",
+            "properties": {
+                "architecture": {
+                    "type": "string"
+                },
+                "framework": {
+                    "type": "string"
+                },
+                "includeExample": {
+                    "description": "Optional: include example code (User entity, usecase, handler)",
+                    "type": "boolean"
+                },
+                "libs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "moduleName": {
+                    "type": "string"
+                },
+                "projectName": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

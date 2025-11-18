@@ -7,7 +7,7 @@ import (
 
     "{{.ModuleName}}/internal/adapter/handler"
     "{{.ModuleName}}/internal/domain"
-    "{{.ModuleName}}/internal/repository"
+    "{{.ModuleName}}/internal/infrastructure/repository"
     "{{.ModuleName}}/internal/usecase"
     "{{.ModuleName}}/internal/deps"
 )
@@ -25,26 +25,35 @@ type BootstrapResult struct {
 }
 
 func SetupDependencies(d *deps.Deps) (*BootstrapResult, error) {
+    {{- if index .Includes "opentelemetry"}}
+    // Get tracer for distributed tracing
+    tracer := d.Tracer.Tracer("{{.ProjectName}}")
+    {{- end}}
+    {{- if index .Includes "validator"}}
+    // Get validator for request validation
+    validator := d.Validator
+    {{- end}}
+
     // Initialize repositories
     var userRepo domain.UserRepository
     var cacheRepo domain.CacheRepository
 
     {{- if or (index .Includes "postgres") (index .Includes "mysql")}}
     // Pass the unified DB field (d.DB) to repository constructor
-    userRepo = repository.NewUserRepository(d.DB)
+    userRepo = repository.NewUserRepository(d.DB, {{- if index .Includes "opentelemetry"}}tracer, {{- end}}d.Log)
     {{- else}}
-    userRepo = repository.NewUserRepository()
+    userRepo = repository.NewUserRepository({{- if index .Includes "opentelemetry"}}tracer, {{- end}}d.Log)
     {{- end}}
 
     {{- if index .Includes "redis"}}
-    cacheRepo = repository.NewCacheRepository(d.Redis)
+    cacheRepo = repository.NewCacheRepository(d.Redis, d.Log)
     {{- else}}
-    cacheRepo = repository.NewCacheRepository()
+    cacheRepo = repository.NewCacheRepository(d.Log)
     {{- end}}
 
     // Initialize usecase and handler
-    userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo)
-    userHandler := handler.NewUserHandler(userUsecase)
+    userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo{{- if index .Includes "opentelemetry"}}, tracer{{- end}}, d.Log)
+    userHandler := handler.NewUserHandler(userUsecase{{- if index .Includes "opentelemetry"}}, tracer{{- end}}{{- if index .Includes "validator"}}, validator{{- end}}, d.Log)
 
     // Optional job initialization (only if cron is enabled)
     {{- if index .Includes "cron"}}

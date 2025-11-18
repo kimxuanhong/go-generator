@@ -32,7 +32,7 @@ A Go project generated using the Go Project Generator with clean architecture pr
 {{- end}}
 {{- end}}
 │   └── infrastructure/           # External services
-{{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "logrus") (index .Includes "resty") (index .Includes "gorm") (index .Includes "mapstructure") (index .Includes "validator") (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq") (index .Includes "cron") (index .Includes "opentelemetry") }}
+{{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "logrus") (index .Includes "resty") (index .Includes "mapstructure") (index .Includes "validator") (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq") (index .Includes "cron") (index .Includes "opentelemetry") }}
 │       - Integrations:
 {{- if index .Includes "postgres"}}
 │         • postgres/              (PostgreSQL setup)
@@ -48,9 +48,6 @@ A Go project generated using the Go Project Generator with clean architecture pr
 {{- end}}
 {{- if index .Includes "resty"}}
 │         • resty/                 (HTTP client setup)
-{{- end}}
-{{- if index .Includes "gorm"}}
-│         • gorm/                  (Generic GORM helpers)
 {{- end}}
 {{- if index .Includes "mapstructure"}}
 │         • mapstructure/          (Mapstructure decoder helpers)
@@ -127,6 +124,15 @@ cp .env.example .env
 ```
 
 Edit `config/config.json` for default values. Environment variables will override config file values.
+
+### Swagger Documentation
+
+This project includes Swagger annotations and a placeholder spec in `docs/`. After updating handlers or adding new routes, regenerate the documentation:
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@latest
+swag init -g cmd/main.go -o docs
+```
 
 {{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "rabbitmq")}}
 ### 3. Start Services (Docker Compose)
@@ -350,9 +356,6 @@ Common variables:
 {{- if index .Includes "activemq"}}
 - `ACTIVEMQ_ADDR`, `ACTIVEMQ_LOGIN`, `ACTIVEMQ_PASSCODE`
 {{- end}}
-{{- if index .Includes "gorm"}}
-- `GORM_DRIVER`, `GORM_DSN`, `GORM_LOGGERLEVEL`, `GORM_SKIPDEFAULTTRANSACTION`
-{{- end}}
 {{- if index .Includes "opentelemetry"}}
 - `OPENTELEMETRY_SERVICENAME`, `OPENTELEMETRY_ENDPOINT`, `OPENTELEMETRY_INSECURE`, `OPENTELEMETRY_SAMPLERATIO`
 {{- end}}
@@ -384,7 +387,8 @@ HTTP Request → Handler → Usecase → Repository → Database
 1. Add a method to `internal/adapter/handler/user_handler.go`
 2. Register the route in `internal/app/routes.go`
 3. Implement logic in `internal/usecase/user_usecase.go`
-4. Access data via `internal/repository/user_repository.go`
+4. Access data via `internal/infrastructure/repository/user_repository.go`
+5. Define database models in `internal/infrastructure/repository/models/`
 
 Example:
 

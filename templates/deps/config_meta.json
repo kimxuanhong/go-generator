@@ -1,0 +1,46 @@
+{
+  "redis": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/redis\""],
+    "config_field": "Redis *redis.Config `json:\"redis,omitempty\" mapstructure:\"redis\"`"
+  },
+  "postgres": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/postgres\""],
+    "config_field": "Postgres *postgres.Config `json:\"postgres,omitempty\" mapstructure:\"postgres\"`"
+  },
+  "mysql": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/mysql\""],
+    "config_field": "MySQL *mysql.Config `json:\"mysql,omitempty\" mapstructure:\"mysql\"`"
+  },
+  "resty": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/resty\""],
+    "config_field": "Resty *resty.Config `json:\"resty,omitempty\" mapstructure:\"resty\"`"
+  },
+  "cron": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/cron\""],
+    "config_field": "Cron *cron.Config `json:\"cron,omitempty\" mapstructure:\"cron\"`"
+  },
+  "rabbitmq": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/rabbitmq\""],
+    "config_field": "RabbitMQ *rabbitmq.Config `json:\"rabbitmq,omitempty\" mapstructure:\"rabbitmq\"`"
+  },
+  "kafka": {
+    "imports": ["kafkainfra \"{{.ModuleName}}/internal/infrastructure/kafka\""],
+    "config_field": "Kafka *kafkainfra.Config `json:\"kafka,omitempty\" mapstructure:\"kafka\"`"
+  },
+  "activemq": {
+    "imports": ["activemqinfra \"{{.ModuleName}}/internal/infrastructure/activemq\""],
+    "config_field": "ActiveMQ *activemqinfra.Config `json:\"activemq,omitempty\" mapstructure:\"activemq\"`"
+  },
+  "mapstructure": {
+    "imports": ["mapstructureinfra \"{{.ModuleName}}/internal/infrastructure/mapstructure\""],
+    "config_field": "Mapstructure *mapstructureinfra.Config `json:\"mapstructure,omitempty\" mapstructure:\"mapstructure\"`"
+  },
+  "validator": {
+    "imports": ["validatorinfra \"{{.ModuleName}}/internal/infrastructure/validator\""],
+    "config_field": "Validator *validatorinfra.Config `json:\"validator,omitempty\" mapstructure:\"validator\"`"
+  },
+  "opentelemetry": {
+    "imports": ["otelinfra \"{{.ModuleName}}/internal/infrastructure/opentelemetry\""],
+    "config_field": "Opentelemetry *otelinfra.Config `json:\"opentelemetry,omitempty\" mapstructure:\"opentelemetry\"`"
+  }
+}

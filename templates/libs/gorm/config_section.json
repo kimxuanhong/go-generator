@@ -1,9 +1,0 @@
-{
-  "gorm": {
-    "driver": "postgres",
-    "dsn": "postgres://postgres:postgres@localhost:5432/example?sslmode=disable",
-    "loggerLevel": "warn",
-    "skipDefaultTransaction": true,
-    "prepareStmt": false
-  }
-}

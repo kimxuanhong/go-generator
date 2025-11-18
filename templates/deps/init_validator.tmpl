@@ -1,0 +1,24 @@
+package deps
+
+import (
+	"fmt"
+
+	validatorinfra "{{.ModuleName}}/internal/infrastructure/validator"
+)
+
+// initValidator initializes the validator instance
+func initValidator(d *Deps, cfg *Config) error {
+	valConfig := cfg.Validator
+	if valConfig == nil {
+		valConfig = &validatorinfra.Config{}
+	}
+	validator, err := validatorinfra.New(*valConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create validator: %w", err)
+	}
+	d.Validator = validator
+	if d.Log != nil {
+		d.Log.Info("Validator initialized successfully")
+	}
+	return nil
+}

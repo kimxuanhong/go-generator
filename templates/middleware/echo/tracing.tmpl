@@ -1,0 +1,42 @@
+package middleware
+
+import (
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+)
+
+const (
+	// Header names for tracing
+	TraceIDHeader   = "X-Trace-ID"
+	RequestIDHeader = "X-Request-ID"
+)
+
+// TracingMiddleware adds distributed tracing support
+func TracingMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Get or generate trace ID
+			traceID := c.Request().Header.Get(TraceIDHeader)
+			if traceID == "" {
+				traceID = uuid.New().String()
+			}
+
+			// Get or generate request ID
+			requestID := c.Request().Header.Get(RequestIDHeader)
+			if requestID == "" {
+				requestID = uuid.New().String()
+			}
+
+			// Set in context for handlers to use
+			c.Set("trace_id", traceID)
+			c.Set("request_id", requestID)
+
+			// Add to response headers
+			c.Response().Header().Set(TraceIDHeader, traceID)
+			c.Response().Header().Set(RequestIDHeader, requestID)
+
+			return next(c)
+		}
+	}
+}
+

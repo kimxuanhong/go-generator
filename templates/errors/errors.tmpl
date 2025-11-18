@@ -1,0 +1,221 @@
+package errors
+
+import (
+	"fmt"
+	"net/http"
+)
+
+// ErrorCode represents application-specific error codes
+type ErrorCode string
+
+const (
+	// Client errors (4xx)
+	ErrCodeValidation      ErrorCode = "VALIDATION_ERROR"
+	ErrCodeNotFound        ErrorCode = "NOT_FOUND"
+	ErrCodeUnauthorized    ErrorCode = "UNAUTHORIZED"
+	ErrCodeForbidden       ErrorCode = "FORBIDDEN"
+	ErrCodeConflict        ErrorCode = "CONFLICT"
+	ErrCodeBadRequest      ErrorCode = "BAD_REQUEST"
+	ErrCodeTooManyRequests ErrorCode = "TOO_MANY_REQUESTS"
+
+	// Server errors (5xx)
+	ErrCodeInternal        ErrorCode = "INTERNAL_ERROR"
+	ErrCodeDatabase        ErrorCode = "DATABASE_ERROR"
+	ErrCodeCache           ErrorCode = "CACHE_ERROR"
+	ErrCodeExternal        ErrorCode = "EXTERNAL_SERVICE_ERROR"
+	ErrCodeTimeout         ErrorCode = "TIMEOUT"
+	ErrCodeUnavailable     ErrorCode = "SERVICE_UNAVAILABLE"
+)
+
+// AppError represents a custom application error with additional context
+type AppError struct {
+	Code       ErrorCode              // Application-specific error code
+	Message    string                 // User-facing error message
+	Internal   error                  // Internal error (not exposed to client)
+	HTTPStatus int                    // HTTP status code
+	Context    map[string]interface{} // Additional context for logging/debugging
+}
+
+// Error implements the error interface
+func (e *AppError) Error() string {
+	if e.Internal != nil {
+		return fmt.Sprintf("[%s] %s: %v", e.Code, e.Message, e.Internal)
+	}
+	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
+}
+
+// Unwrap implements error unwrapping for errors.Is and errors.As
+func (e *AppError) Unwrap() error {
+	return e.Internal
+}
+
+// WithContext adds context information to the error
+func (e *AppError) WithContext(key string, value interface{}) *AppError {
+	if e.Context == nil {
+		e.Context = make(map[string]interface{})
+	}
+	e.Context[key] = value
+	return e
+}
+
+// WithInternal sets the internal error
+func (e *AppError) WithInternal(err error) *AppError {
+	e.Internal = err
+	return e
+}
+
+// New creates a new AppError
+func New(code ErrorCode, message string) *AppError {
+	return &AppError{
+		Code:       code,
+		Message:    message,
+		HTTPStatus: codeToHTTPStatus(code),
+		Context:    make(map[string]interface{}),
+	}
+}
+
+// Wrap wraps an existing error with AppError
+func Wrap(err error, code ErrorCode, message string) *AppError {
+	if err == nil {
+		return nil
+	}
+	
+	// If it's already an AppError, preserve it
+	if appErr, ok := err.(*AppError); ok {
+		return appErr
+	}
+	
+	return &AppError{
+		Code:       code,
+		Message:    message,
+		Internal:   err,
+		HTTPStatus: codeToHTTPStatus(code),
+		Context:    make(map[string]interface{}),
+	}
+}
+
+// Pre-defined error constructors for common cases
+
+// NotFound creates a not found error
+func NotFound(resource string) *AppError {
+	return New(ErrCodeNotFound, fmt.Sprintf("%s not found", resource)).
+		WithContext("resource", resource)
+}
+
+// ValidationError creates a validation error
+func ValidationError(message string) *AppError {
+	return New(ErrCodeValidation, message)
+}
+
+// BadRequest creates a bad request error
+func BadRequest(message string) *AppError {
+	return New(ErrCodeBadRequest, message)
+}
+
+// Unauthorized creates an unauthorized error
+func Unauthorized(message string) *AppError {
+	if message == "" {
+		message = "Unauthorized access"
+	}
+	return New(ErrCodeUnauthorized, message)
+}
+
+// Forbidden creates a forbidden error
+func Forbidden(message string) *AppError {
+	if message == "" {
+		message = "Access forbidden"
+	}
+	return New(ErrCodeForbidden, message)
+}
+
+// Conflict creates a conflict error
+func Conflict(message string) *AppError {
+	return New(ErrCodeConflict, message)
+}
+
+// Internal creates an internal server error
+func Internal(message string, err error) *AppError {
+	if message == "" {
+		message = "Internal server error"
+	}
+	return New(ErrCodeInternal, message).WithInternal(err)
+}
+
+// Database creates a database error
+func Database(operation string, err error) *AppError {
+	return New(ErrCodeDatabase, "Database operation failed").
+		WithInternal(err).
+		WithContext("operation", operation)
+}
+
+// Cache creates a cache error
+func Cache(operation string, err error) *AppError {
+	return New(ErrCodeCache, "Cache operation failed").
+		WithInternal(err).
+		WithContext("operation", operation)
+}
+
+// External creates an external service error
+func External(service string, err error) *AppError {
+	return New(ErrCodeExternal, "External service error").
+		WithInternal(err).
+		WithContext("service", service)
+}
+
+// Timeout creates a timeout error
+func Timeout(operation string) *AppError {
+	return New(ErrCodeTimeout, "Operation timed out").
+		WithContext("operation", operation)
+}
+
+// Unavailable creates a service unavailable error
+func Unavailable(message string) *AppError {
+	if message == "" {
+		message = "Service temporarily unavailable"
+	}
+	return New(ErrCodeUnavailable, message)
+}
+
+// TooManyRequests creates a rate limit error
+func TooManyRequests(message string) *AppError {
+	if message == "" {
+		message = "Too many requests"
+	}
+	return New(ErrCodeTooManyRequests, message)
+}
+
+// codeToHTTPStatus maps error codes to HTTP status codes
+func codeToHTTPStatus(code ErrorCode) int {
+	switch code {
+	case ErrCodeValidation, ErrCodeBadRequest:
+		return http.StatusBadRequest
+	case ErrCodeNotFound:
+		return http.StatusNotFound
+	case ErrCodeUnauthorized:
+		return http.StatusUnauthorized
+	case ErrCodeForbidden:
+		return http.StatusForbidden
+	case ErrCodeConflict:
+		return http.StatusConflict
+	case ErrCodeTooManyRequests:
+		return http.StatusTooManyRequests
+	case ErrCodeTimeout:
+		return http.StatusRequestTimeout
+	case ErrCodeUnavailable:
+		return http.StatusServiceUnavailable
+	case ErrCodeDatabase, ErrCodeCache, ErrCodeExternal, ErrCodeInternal:
+		return http.StatusInternalServerError
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
+// IsAppError checks if an error is an AppError
+func IsAppError(err error) (*AppError, bool) {
+	if err == nil {
+		return nil, false
+	}
+	appErr, ok := err.(*AppError)
+	return appErr, ok
+}
+

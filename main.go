@@ -2,48 +2,88 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	docs "github.com/xhkzeroone/go-generator/docs"
+	"github.com/xhkzeroone/go-generator/internal/constants"
 	"github.com/xhkzeroone/go-generator/internal/handler"
+	"github.com/xhkzeroone/go-generator/internal/middleware"
 	"github.com/xhkzeroone/go-generator/internal/service"
 )
 
+// @title Go Generator API
+// @version 1.0
+// @description API endpoints for generating Go project scaffolding.
+// @BasePath /
 func main() {
+	// Initialize logger
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{
+		TimestampFormat: time.RFC3339,
+	})
+	logger.SetLevel(logrus.InfoLevel)
+	if os.Getenv("LOG_LEVEL") == "debug" {
+		logger.SetLevel(logrus.DebugLevel)
+	}
+
 	// Initialize service
-	manifestPath := "manifest.json"
+	manifestPath := constants.DefaultManifestPath
 	if path := os.Getenv("MANIFEST_PATH"); path != "" {
 		manifestPath = path
 	}
 
 	genService, err := service.NewGeneratorService(manifestPath)
 	if err != nil {
-		log.Fatalf("Failed to initialize generator service: %v", err)
+		logger.WithError(err).Fatal("Failed to initialize generator service")
 	}
 
+	// Initialize rate limiter (100 requests per minute per IP)
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, logger)
+	defer rateLimiter.Stop()
+
 	// Initialize handlers
-	genHandler := handler.NewGenerateHandler(genService)
-	healthHandler := handler.NewHealthHandler()
-	manifestHandler := handler.NewManifestHandler(genService)
+	genHandler := handler.NewGenerateHandler(genService, logger)
+	healthHandler := handler.NewHealthHandler(logger)
+	manifestHandler := handler.NewManifestHandler(genService, logger)
 
 	// Setup routes
 	mux := http.NewServeMux()
 
-	// API endpoints (must be before the catch-all)
-	mux.HandleFunc("/generate", genHandler.HandleGenerate)
-	mux.HandleFunc("/health", healthHandler.HandleHealth)
-	mux.HandleFunc("/manifest", manifestHandler.HandleManifest)
+	docs.SwaggerInfo.BasePath = "/"
 
-	// Serve frontend as catch-all
+	// Apply middlewares (order matters: tracing -> metrics -> logging -> rate limit)
+	tracingMiddleware := middleware.TracingMiddleware
+	metricsMiddleware := middleware.MetricsMiddleware
+	loggingMiddleware := middleware.LoggingMiddleware(logger)
+
+	// Chain middlewares
+	chainMiddleware := func(h http.Handler) http.Handler {
+		return tracingMiddleware(metricsMiddleware(loggingMiddleware(h)))
+	}
+
+	// Metrics endpoint (no rate limiting, but with other middlewares)
+	metricsHandler := handler.NewMetricsHandler()
+	mux.Handle("/metrics", chainMiddleware(http.HandlerFunc(metricsHandler.HandleMetrics)))
+
+	// API endpoints with all middlewares and rate limiting (must be before the catch-all)
+	mux.Handle("/generate", chainMiddleware(rateLimiter.Limit(http.HandlerFunc(genHandler.HandleGenerate))))
+	mux.Handle("/health", chainMiddleware(http.HandlerFunc(healthHandler.HandleHealth)))
+	mux.Handle("/manifest", chainMiddleware(http.HandlerFunc(manifestHandler.HandleManifest)))
+	mux.Handle("/swagger/", chainMiddleware(httpSwagger.WrapHandler))
+
+	// Serve frontend as catch-all (with all middlewares)
 	fs := http.FileServer(http.Dir("public"))
-	mux.Handle("/", fs)
+	mux.Handle("/", chainMiddleware(fs))
 
 	// Server configuration
-	port := ":8080"
+	port := constants.DefaultPort
 	if p := os.Getenv("PORT"); p != "" {
 		port = ":" + p
 	}
@@ -58,9 +98,9 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Server starting on http://localhost%s", port)
+		logger.WithField("port", port).Info("Server starting")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			logger.WithError(err).Fatal("Server failed to start")
 		}
 	}()
 
@@ -69,15 +109,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.WithError(err).Fatal("Server forced to shutdown")
 	}
 
-	log.Println("Server exited")
+	logger.Info("Server exited")
 }

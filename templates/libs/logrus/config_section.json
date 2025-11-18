@@ -1,9 +1,0 @@
-{
-  "logrus": {
-    "level": "info",
-    "format": "json",
-    "output": "stdout",
-    "reportCaller": false
-  }
-}
-

@@ -33,15 +33,6 @@
 # MYSQL_DSN=user:password@tcp(localhost:3306)/database?charset=utf8mb4&parseTime=True&loc=Local
 {{- end}}
 
-{{- if index .Includes "gorm"}}
-# GORM generic configuration
-# GORM_DRIVER=postgres
-# GORM_DSN=postgres://postgres:postgres@localhost:5432/example?sslmode=disable
-# GORM_LOGGERLEVEL=warn
-# GORM_SKIPDEFAULTTRANSACTION=true
-# GORM_PREPARESTMT=false
-{{- end}}
-
 {{- if index .Includes "logrus"}}
 # Logrus configuration
 # LOGRUS_LEVEL=info

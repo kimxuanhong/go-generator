@@ -1,82 +1,176 @@
 package usecase
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	{{- if and (index .Includes "resty") (index .Includes "redis")}}
 	"github.com/go-resty/resty/v2"
 	{{- end}}
 
 	"{{.ModuleName}}/internal/domain"
+	"{{.ModuleName}}/internal/errors"
+	{{- if index .Includes "opentelemetry"}}
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	{{- end}}
 )
 
 // UserUsecase handles user business logic
 type UserUsecase struct {
 	userRepo  domain.UserRepository
 	cacheRepo domain.CacheRepository
+	{{- if index .Includes "opentelemetry"}}
+	tracer    trace.Tracer
+	{{- end}}
+	log       *logrus.Logger
 }
 
 // NewUserUsecase creates a new user usecase
-func NewUserUsecase(userRepo domain.UserRepository, cacheRepo domain.CacheRepository) *UserUsecase {
+func NewUserUsecase(userRepo domain.UserRepository, cacheRepo domain.CacheRepository{{- if index .Includes "opentelemetry"}}, tracer trace.Tracer{{- end}}, log *logrus.Logger) *UserUsecase {
 	return &UserUsecase{
 		userRepo:  userRepo,
 		cacheRepo: cacheRepo,
+		{{- if index .Includes "opentelemetry"}}
+		tracer:    tracer,
+		{{- end}}
+		log:       log,
 	}
 }
 
 // GetUser retrieves a user by ID
-func (u *UserUsecase) GetUser(id int64) (*domain.User, error) {
+func (u *UserUsecase) GetUser(ctx context.Context, id int64) (*domain.User, error) {
+	u.log.WithField("user_id", id).Info("Fetching user")
+
+	{{- if index .Includes "opentelemetry"}}
+	// Start span for usecase operation
+	ctx, span := u.tracer.Start(ctx, "usecase.GetUser")
+	defer span.End()
+	span.SetAttributes(attribute.Int64("user.id", id))
+	{{- end}}
+
 	// Check cache first
 	cacheKey := fmt.Sprintf("user:%d", id)
-	if cached, err := u.cacheRepo.Get(cacheKey); err == nil && cached != "" {
+	if cached, err := u.cacheRepo.Get(ctx, cacheKey); err == nil && cached != "" {
+		u.log.WithField("user_id", id).Debug("Cache hit for user")
+		{{- if index .Includes "opentelemetry"}}
+		span.AddEvent("cache_hit", trace.WithAttributes(attribute.String("cache.key", cacheKey)))
+		{{- end}}
 		// Return cached user if available
 		// In real implementation, deserialize from cache
 	}
 
+	u.log.WithField("user_id", id).Debug("Cache miss, fetching from database")
+	{{- if index .Includes "opentelemetry"}}
+	span.AddEvent("cache_miss", trace.WithAttributes(attribute.String("cache.key", cacheKey)))
+	{{- end}}
+
 	// Get from repository
-	user, err := u.userRepo.GetByID(id)
+	user, err := u.userRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		u.log.WithError(err).WithField("user_id", id).Error("Failed to get user from repository")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get user from repository")
+		{{- end}}
+		// Return the error as-is if it's already an AppError, otherwise wrap it
+		if appErr, ok := errors.IsAppError(err); ok {
+			return nil, appErr
+		}
+		return nil, errors.Internal("Failed to retrieve user", err).WithContext("user_id", id)
 	}
 
 	// Cache the user
 	if user != nil {
 		// In real implementation, serialize and cache
-		_ = u.cacheRepo.Set(cacheKey, "")
+		_ = u.cacheRepo.Set(ctx, cacheKey, "")
 	}
 
+	u.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("User retrieved successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user retrieved successfully")
+	{{- end}}
 	return user, nil
 }
 
 {{- if and (index .Includes "resty") (index .Includes "redis")}}
 // FetchExternalData fetches data from an external HTTP API and caches it in Redis
-func (u *UserUsecase) FetchExternalData(url string) (string, error) {
+func (u *UserUsecase) FetchExternalData(ctx context.Context, url string) (string, error) {
+	u.log.WithField("url", url).Info("Fetching external data")
+
 	cacheKey := fmt.Sprintf("external:%s", url)
-	if cached, err := u.cacheRepo.Get(cacheKey); err == nil && cached != "" {
+	if cached, err := u.cacheRepo.Get(ctx, cacheKey); err == nil && cached != "" {
+		u.log.WithField("url", url).Debug("Cache hit for external data")
 		return cached, nil
 	}
 
+	u.log.WithField("url", url).Debug("Cache miss, fetching from external API")
+
 	// Create a temporary Resty client for the example. In real applications prefer reusing a client from deps.
 	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := client.R().SetContext(ctx).Get(url)
 	if err != nil {
+		u.log.WithError(err).WithField("url", url).Error("Failed to fetch external resource")
 		return "", fmt.Errorf("failed to fetch external resource: %w", err)
 	}
 
 	body := string(resp.Body())
 
 	// Cache the response (best-effort)
-	_ = u.cacheRepo.Set(cacheKey, body)
+	_ = u.cacheRepo.Set(ctx, cacheKey, body)
 
+	u.log.WithField("url", url).Info("External data fetched successfully")
 	return body, nil
 }
 {{- end}}
 
 // CreateUser creates a new user
-func (u *UserUsecase) CreateUser(user *domain.User) error {
-	if err := u.userRepo.Create(user); err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+func (u *UserUsecase) CreateUser(ctx context.Context, user *domain.User) error {
+	u.log.WithFields(logrus.Fields{
+		"email": user.Email,
+		"name":  user.Name,
+	}).Info("Creating new user")
+
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := u.tracer.Start(ctx, "usecase.CreateUser")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("user.email", user.Email),
+		attribute.String("user.name", user.Name),
+	)
+	{{- end}}
+
+	if err := u.userRepo.Create(ctx, user); err != nil {
+		u.log.WithError(err).WithFields(logrus.Fields{
+			"email": user.Email,
+			"name":  user.Name,
+		}).Error("Failed to create user in repository")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create user")
+		{{- end}}
+		// Return the error as-is if it's already an AppError, otherwise wrap it
+		if appErr, ok := errors.IsAppError(err); ok {
+			return appErr
+		}
+		return errors.Internal("Failed to create user", err).WithContext("user_email", user.Email)
 	}
+
+	u.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("User created successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user created successfully")
+	span.SetAttributes(attribute.Int64("user.id", user.ID))
+	{{- end}}
 	return nil
 }
 

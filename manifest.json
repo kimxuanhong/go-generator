@@ -1,4 +1,5 @@
 {
+  "version": "1.0.0",
   "libs": {
     "redis": {
       "imports": [
@@ -40,35 +41,6 @@
       "display_name": "PostgreSQL",
       "icon": "🐘",
       "is_radio": true
-    },
-    "gorm": {
-      "imports": [
-        "gorm.io/gorm",
-        "gorm.io/driver/postgres",
-        "gorm.io/driver/mysql",
-        "gorm.io/driver/sqlite"
-      ],
-      "config_section": "templates/libs/gorm/config_section.json",
-      "templates": [
-        "templates/libs/gorm/gorm.tmpl"
-      ],
-      "category": "database",
-      "display_name": "GORM",
-      "icon": "🗃️",
-      "is_radio": false
-    },
-    "logrus": {
-      "imports": [
-        "github.com/sirupsen/logrus"
-      ],
-      "config_section": "templates/libs/logrus/config_section.json",
-      "templates": [
-        "templates/libs/logrus/logrus.tmpl"
-      ],
-      "category": "utilities",
-      "display_name": "Logrus",
-      "icon": "📝",
-      "is_radio": false
     },
     "resty": {
       "imports": [
@@ -185,7 +157,9 @@
   "frameworks": {
     "gin": {
       "imports": [
-        "github.com/gin-gonic/gin"
+        "github.com/gin-gonic/gin",
+        "github.com/swaggo/files",
+        "github.com/swaggo/gin-swagger"
       ],
       "config_section": "templates/frameworks/gin/config_section.json",
       "templates": [
@@ -196,7 +170,8 @@
     },
     "fiber": {
       "imports": [
-        "github.com/gofiber/fiber/v2"
+        "github.com/gofiber/fiber/v2",
+        "github.com/gofiber/swagger"
       ],
       "config_section": "templates/frameworks/fiber/config_section.json",
       "templates": [
@@ -207,7 +182,8 @@
     },
     "echo": {
       "imports": [
-        "github.com/labstack/echo/v4"
+        "github.com/labstack/echo/v4",
+        "github.com/swaggo/echo-swagger"
       ],
       "config_section": "templates/frameworks/echo/config_section.json",
       "templates": [

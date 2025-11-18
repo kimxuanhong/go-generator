@@ -2,14 +2,18 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"time"
 
+	fiberSwagger "github.com/gofiber/swagger"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/middleware"
 )
 
 // Start starts the Fiber HTTP server
-func Start(cfg *deps.Config) error {
+func Start(cfg *deps.Config, d *deps.Deps) error {
 	if cfg.Fiber == nil {
 		return fmt.Errorf("fiber config is required")
 	}
@@ -17,6 +21,21 @@ func Start(cfg *deps.Config) error {
 	app := fiber.New(fiber.Config{
 		Prefork: cfg.Fiber.Prefork,
 	})
+
+	// Recovery middleware
+	app.Use(recover.New())
+
+	// Apply custom middleware
+	// Order: tracing -> logging -> rate limit
+	app.Use(middleware.TracingMiddleware())
+	app.Use(middleware.LoggingMiddleware(d.Log))
+
+	// Rate limiter: 100 requests per minute per IP
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	app.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	app.Get("/swagger/*", fiberSwagger.HandlerDefault)
 
 	// Health check endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -31,7 +50,7 @@ func Start(cfg *deps.Config) error {
 	})
 
 	addr := cfg.Fiber.GetAddr()
-	log.Printf("Starting Fiber server on %s", addr)
+	d.Log.Infof("Starting Fiber server on %s", addr)
 	if err := app.Listen(addr); err != nil {
 		return fmt.Errorf("failed to start fiber server: %w", err)
 	}

@@ -1,0 +1,67 @@
+package middleware
+
+import (
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/sirupsen/logrus"
+)
+
+// LoggingMiddleware logs HTTP requests with structured logging
+func LoggingMiddleware(logger *logrus.Logger) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		start := time.Now()
+
+		// Get request ID and trace ID from context
+		requestID := c.Locals("request_id")
+		traceID := c.Locals("trace_id")
+
+		// Log request start
+		fields := logrus.Fields{
+			"method":      c.Method(),
+			"path":        c.Path(),
+			"remote_addr": c.IP(),
+			"user_agent":  c.Get("User-Agent"),
+		}
+		if requestID != nil {
+			fields["request_id"] = requestID
+		}
+		if traceID != nil {
+			fields["trace_id"] = traceID
+		}
+		logger.WithFields(fields).Info("Request started")
+
+		// Process request
+		err := c.Next()
+
+		// Calculate duration
+		duration := time.Since(start)
+
+		// Log response
+		responseFields := logrus.Fields{
+			"method":      c.Method(),
+			"path":        c.Path(),
+			"status_code": c.Response().StatusCode(),
+			"duration_ms": duration.Milliseconds(),
+		}
+		if requestID != nil {
+			responseFields["request_id"] = requestID
+		}
+		if traceID != nil {
+			responseFields["trace_id"] = traceID
+		}
+
+		// Log level based on status code
+		statusCode := c.Response().StatusCode()
+		if statusCode >= 500 {
+			logger.WithFields(responseFields).Error("Request completed with server error")
+		} else if statusCode >= 400 {
+			logger.WithFields(responseFields).Warn("Request completed with client error")
+		} else {
+			logger.WithFields(responseFields).Info("Request completed")
+		}
+
+		return err
+	}
+}
+

@@ -1,0 +1,124 @@
+package middleware
+
+import (
+	"sync"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/sirupsen/logrus"
+)
+
+// RateLimiter implements a simple token bucket rate limiter
+type RateLimiter struct {
+	clients map[string]*clientLimiter
+	mu      sync.RWMutex
+	rate    int           // requests per window
+	window  time.Duration // time window
+	logger  *logrus.Logger
+}
+
+type clientLimiter struct {
+	tokens     int
+	lastUpdate time.Time
+	mu         sync.Mutex
+}
+
+// NewRateLimiter creates a new rate limiter
+// rate: number of requests allowed per window
+// window: time window for the rate limit (e.g., time.Minute)
+func NewRateLimiter(rate int, window time.Duration, logger *logrus.Logger) *RateLimiter {
+	rl := &RateLimiter{
+		clients: make(map[string]*clientLimiter),
+		rate:    rate,
+		window:  window,
+		logger:  logger,
+	}
+
+	// Cleanup old entries every minute
+	go rl.cleanupLoop()
+
+	return rl
+}
+
+// Middleware returns a Fiber middleware handler
+func (rl *RateLimiter) Middleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		clientIP := c.IP()
+
+		if !rl.allow(clientIP) {
+			rl.logger.WithFields(logrus.Fields{
+				"client_ip": clientIP,
+				"path":      c.Path(),
+			}).Warn("Rate limit exceeded")
+
+			c.Set("Retry-After", rl.window.String())
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Rate limit exceeded. Please try again later.",
+			})
+		}
+
+		return c.Next()
+	}
+}
+
+// allow checks if a request from the given IP should be allowed
+func (rl *RateLimiter) allow(clientIP string) bool {
+	rl.mu.Lock()
+	limiter, exists := rl.clients[clientIP]
+	if !exists {
+		limiter = &clientLimiter{
+			tokens:     rl.rate,
+			lastUpdate: time.Now(),
+		}
+		rl.clients[clientIP] = limiter
+	}
+	rl.mu.Unlock()
+
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+
+	// Refill tokens based on elapsed time
+	now := time.Now()
+	elapsed := now.Sub(limiter.lastUpdate)
+	tokensToAdd := int(elapsed / (rl.window / time.Duration(rl.rate)))
+
+	if tokensToAdd > 0 {
+		limiter.tokens = min(limiter.tokens+tokensToAdd, rl.rate)
+		limiter.lastUpdate = now
+	}
+
+	if limiter.tokens > 0 {
+		limiter.tokens--
+		return true
+	}
+
+	return false
+}
+
+// cleanupLoop removes old entries that haven't been used recently
+func (rl *RateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		rl.mu.Lock()
+		now := time.Now()
+		for ip, limiter := range rl.clients {
+			limiter.mu.Lock()
+			// Remove entries that haven't been used in the last 10 minutes
+			if now.Sub(limiter.lastUpdate) > 10*time.Minute {
+				delete(rl.clients, ip)
+			}
+			limiter.mu.Unlock()
+		}
+		rl.mu.Unlock()
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+

@@ -1,0 +1,65 @@
+package middleware
+
+import (
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+)
+
+// LoggingMiddleware logs HTTP requests with structured logging
+func LoggingMiddleware(logger *logrus.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		// Get request ID and trace ID from context
+		requestID := c.GetString("request_id")
+		traceID := c.GetString("trace_id")
+
+		// Log request start
+		fields := logrus.Fields{
+			"method":      c.Request.Method,
+			"path":        c.Request.URL.Path,
+			"remote_addr": c.ClientIP(),
+			"user_agent":  c.Request.UserAgent(),
+		}
+		if requestID != "" {
+			fields["request_id"] = requestID
+		}
+		if traceID != "" {
+			fields["trace_id"] = traceID
+		}
+		logger.WithFields(fields).Info("Request started")
+
+		// Process request
+		c.Next()
+
+		// Calculate duration
+		duration := time.Since(start)
+
+		// Log response
+		responseFields := logrus.Fields{
+			"method":      c.Request.Method,
+			"path":        c.Request.URL.Path,
+			"status_code": c.Writer.Status(),
+			"duration_ms": duration.Milliseconds(),
+		}
+		if requestID != "" {
+			responseFields["request_id"] = requestID
+		}
+		if traceID != "" {
+			responseFields["trace_id"] = traceID
+		}
+
+		// Log level based on status code
+		statusCode := c.Writer.Status()
+		if statusCode >= 500 {
+			logger.WithFields(responseFields).Error("Request completed with server error")
+		} else if statusCode >= 400 {
+			logger.WithFields(responseFields).Warn("Request completed with client error")
+		} else {
+			logger.WithFields(responseFields).Info("Request completed")
+		}
+	}
+}
+

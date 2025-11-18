@@ -1,0 +1,177 @@
+{
+  "redis": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/redis\""],
+    "struct_field": "Redis *redis.Client",
+    "init_lines": [
+      "if err := initRedis(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init redis: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.Redis != nil {",
+      "\tif err := d.Redis.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_redis.tmpl"]
+  },
+  "postgres": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/postgres\""],
+    "struct_field": "DB *postgres.DB",
+    "init_lines": [
+      "if err := initPostgres(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init postgres: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.DB != nil {",
+      "\tif err := d.DB.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_postgres.tmpl"]
+  },
+  "mysql": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/mysql\""],
+    "struct_field": "DB *mysql.DB",
+    "init_lines": [
+      "if err := initMySQL(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init mysql: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.DB != nil {",
+      "\tif err := d.DB.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_mysql.tmpl"]
+  },
+  "resty": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/resty\""],
+    "struct_field": "Resty *resty.Client",
+    "init_lines": [
+      "if err := initResty(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init resty: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.Resty != nil {",
+      "\tif err := d.Resty.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_resty.tmpl"]
+  },
+  "cron": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/cron\""],
+    "struct_field": "Cron *cron.Scheduler",
+    "init_lines": [
+      "if err := initCron(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init cron: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.Cron != nil {",
+      "\tif err := d.Cron.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_cron.tmpl"]
+  },
+  "rabbitmq": {
+    "imports": ["\"{{.ModuleName}}/internal/infrastructure/rabbitmq\""],
+    "struct_field": "RabbitMQ *rabbitmq.Connection",
+    "init_lines": [
+      "if err := initRabbitMQ(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init rabbitmq: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.RabbitMQ != nil {",
+      "\tif err := d.RabbitMQ.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_rabbitmq.tmpl"]
+  },
+  "kafka": {
+    "imports": ["kafkainfra \"{{.ModuleName}}/internal/infrastructure/kafka\""],
+    "struct_field": "Kafka *kafkainfra.Client",
+    "init_lines": [
+      "if err := initKafka(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init kafka: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.Kafka != nil {",
+      "\tif err := d.Kafka.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_kafka.tmpl"]
+  },
+  "activemq": {
+    "imports": ["activemqinfra \"{{.ModuleName}}/internal/infrastructure/activemq\""],
+    "struct_field": "ActiveMQ *activemqinfra.Client",
+    "init_lines": [
+      "if err := initActiveMQ(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init activemq: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.ActiveMQ != nil {",
+      "\tif err := d.ActiveMQ.Close(); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_activemq.tmpl"]
+  },
+  "mapstructure": {
+    "imports": ["mapstructureinfra \"{{.ModuleName}}/internal/infrastructure/mapstructure\""],
+    "struct_field": "Mapper *mapstructureinfra.DecoderFactory",
+    "init_lines": [
+      "if err := initMapstructure(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init mapstructure: %w\", err)",
+      "}"
+    ],
+    "close_lines": [],
+    "helper_files": ["init_mapstructure.tmpl"]
+  },
+  "validator": {
+    "imports": ["validatorinfra \"{{.ModuleName}}/internal/infrastructure/validator\""],
+    "struct_field": "Validator *validatorinfra.Validator",
+    "init_lines": [
+      "if err := initValidator(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init validator: %w\", err)",
+      "}"
+    ],
+    "close_lines": [],
+    "helper_files": ["init_validator.tmpl"]
+  },
+  "opentelemetry": {
+    "imports": ["\"context\"","otelinfra \"{{.ModuleName}}/internal/infrastructure/opentelemetry\""],
+    "struct_field": "Tracer *otelinfra.Provider",
+    "init_lines": [
+      "if err := initOpenTelemetry(d, cfg); err != nil {",
+      "\treturn nil, fmt.Errorf(\"failed to init opentelemetry: %w\", err)",
+      "}"
+    ],
+    "close_lines": [
+      "if d.Tracer != nil {",
+      "\tif err := d.Tracer.Shutdown(context.Background()); err != nil {",
+      "\t\treturn err",
+      "\t}",
+      "}"
+    ],
+    "helper_files": ["init_opentelemetry.tmpl"]
+  }
+}

@@ -2,17 +2,27 @@ package app
 
 import (
 	"fmt"
-	"log"
+	{{- if or (eq .Framework "gin") (eq .Framework "echo")}}
 	"net/http"
+	{{- end}}
+	"time"
 
 	{{- if eq .Framework "fiber"}}
+	fiberSwagger "github.com/gofiber/swagger"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	{{- else if eq .Framework "gin"}}
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/gin-gonic/gin"
 	{{- else if eq .Framework "echo"}}
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"github.com/labstack/echo/v4"
+	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	{{- end}}
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/middleware"
 )
 
 // Server holds the application server
@@ -30,7 +40,19 @@ type Server struct {
 func NewServer(d *deps.Deps) (*Server, error) {
 	{{- if eq .Framework "fiber"}}
 	app := fiber.New()
-	
+
+	// Recovery middleware
+	app.Use(recover.New())
+
+	// Apply custom middleware: tracing -> logging -> rate limit
+	app.Use(middleware.TracingMiddleware())
+	app.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	app.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	app.Get("/swagger/*", fiberSwagger.HandlerDefault)
+
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})
@@ -43,7 +65,20 @@ func NewServer(d *deps.Deps) (*Server, error) {
 
 	return &Server{app: app}, nil
 	{{- else if eq .Framework "gin"}}
-	router := gin.Default()
+	// Create router without default middleware (we'll add our own)
+	router := gin.New()
+	
+	// Recovery middleware
+	router.Use(gin.Recovery())
+
+	// Apply custom middleware: tracing -> logging -> rate limit
+	router.Use(middleware.TracingMiddleware())
+	router.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	router.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Health check
 	router.GET("/health", func(c *gin.Context) {
@@ -58,6 +93,18 @@ func NewServer(d *deps.Deps) (*Server, error) {
 	return &Server{router: router}, nil
 	{{- else if eq .Framework "echo"}}
 	e := echo.New()
+
+	// Recovery middleware
+	e.Use(echoMiddleware.Recover())
+
+	// Apply custom middleware: tracing -> logging -> rate limit
+	e.Use(middleware.TracingMiddleware())
+	e.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	e.Use(rateLimiter.Middleware())
+
+	// Swagger documentation
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	// Health check
 	e.GET("/health", func(c echo.Context) error {

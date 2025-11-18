@@ -1,0 +1,40 @@
+package middleware
+
+import (
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+)
+
+const (
+	// Header names for tracing
+	TraceIDHeader   = "X-Trace-ID"
+	RequestIDHeader = "X-Request-ID"
+)
+
+// TracingMiddleware adds distributed tracing support
+func TracingMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Get or generate trace ID
+		traceID := c.Get(TraceIDHeader)
+		if traceID == "" {
+			traceID = uuid.New().String()
+		}
+
+		// Get or generate request ID
+		requestID := c.Get(RequestIDHeader)
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+
+		// Set in context for handlers to use
+		c.Locals("trace_id", traceID)
+		c.Locals("request_id", requestID)
+
+		// Add to response headers
+		c.Set(TraceIDHeader, traceID)
+		c.Set(RequestIDHeader, requestID)
+
+		return c.Next()
+	}
+}
+

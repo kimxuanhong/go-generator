@@ -1,18 +1,29 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
-
-	{{- if eq .Framework "fiber"}}
-	"github.com/gofiber/fiber/v2"
-	{{- else if eq .Framework "gin"}}
-	"github.com/gin-gonic/gin"
-	{{- else if eq .Framework "echo"}}
-	"github.com/labstack/echo/v4"
+	{{- if or (eq .Framework "gin") (eq .Framework "echo")}}
 	"net/http"
 	{{- end}}
+
+	{{- if eq .Framework "fiber"}}
+	fiberSwagger "github.com/gofiber/swagger"
+	"github.com/gofiber/fiber/v2"
+	{{- else if eq .Framework "gin"}}
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/gin-gonic/gin"
+	{{- else if eq .Framework "echo"}}
+	echoSwagger "github.com/swaggo/echo-swagger"
+	"github.com/labstack/echo/v4"
+	{{- end}}
+	"time"
+	
+	_ "{{.ModuleName}}/docs"
 	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/middleware"
 )
 
 // Server holds the application server
@@ -21,6 +32,7 @@ type Server struct {
 	app *fiber.App
 	{{- else if eq .Framework "gin"}}
 	router *gin.Engine
+	srv    *http.Server
 	{{- else if eq .Framework "echo"}}
 	echo *echo.Echo
 	{{- end}}
@@ -47,6 +59,14 @@ func NewServer(d *deps.Deps) (*Server, error) {
 
 	{{- if eq .Framework "fiber"}}
 	app := fiber.New()
+	
+	// Apply middleware in order: tracing -> logging -> rate limit
+	app.Use(middleware.TracingMiddleware())
+	app.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	app.Use(rateLimiter.Middleware())
+	
+	app.Get("/swagger/*", fiberSwagger.HandlerDefault)
 	srv := &Server{app: app}
 
     {{- if eq .IncludeExample true}}
@@ -56,7 +76,19 @@ func NewServer(d *deps.Deps) (*Server, error) {
 
 	return srv, nil
 	{{- else if eq .Framework "gin"}}
-	router := gin.Default()
+	// Create router without default middleware (we'll add our own)
+	router := gin.New()
+	
+	// Recovery middleware (Gin's built-in)
+	router.Use(gin.Recovery())
+	
+	// Apply custom middleware in order: tracing -> logging -> rate limit
+	router.Use(middleware.TracingMiddleware())
+	router.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	router.Use(rateLimiter.Middleware())
+	
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	srv := &Server{router: router}
 
     {{- if eq .IncludeExample true}}
@@ -67,6 +99,14 @@ func NewServer(d *deps.Deps) (*Server, error) {
 	return srv, nil
 	{{- else if eq .Framework "echo"}}
 	e := echo.New()
+	
+	// Apply middleware in order: tracing -> logging -> rate limit
+	e.Use(middleware.TracingMiddleware())
+	e.Use(middleware.LoggingMiddleware(d.Log))
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, d.Log)
+	e.Use(rateLimiter.Middleware())
+	
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	srv := &Server{echo: e}
 
     {{- if eq .IncludeExample true}}
@@ -99,7 +139,11 @@ func (s *Server) Start(cfg *deps.Config) error {
 	}
 	addr := cfg.Gin.GetAddr()
 	log.Printf("Starting Gin server on %s", addr)
-	if err := s.router.Run(addr); err != nil {
+	s.srv = &http.Server{
+		Addr:    addr,
+		Handler: s.router,
+	}
+	if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("failed to start gin server: %w", err)
 	}
 	return nil
@@ -114,6 +158,23 @@ func (s *Server) Start(cfg *deps.Config) error {
 		return fmt.Errorf("failed to start echo server: %w", err)
 	}
 	return nil
+	{{- end}}
+}
+
+// Shutdown gracefully shuts down the server
+func (s *Server) Shutdown(ctx context.Context) error {
+	{{- if eq .Framework "fiber"}}
+	log.Println("Shutting down Fiber server...")
+	return s.app.ShutdownWithContext(ctx)
+	{{- else if eq .Framework "gin"}}
+	log.Println("Shutting down Gin server...")
+	if s.srv == nil {
+		return nil
+	}
+	return s.srv.Shutdown(ctx)
+	{{- else if eq .Framework "echo"}}
+	log.Println("Shutting down Echo server...")
+	return s.echo.Shutdown(ctx)
 	{{- end}}
 }
 

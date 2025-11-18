@@ -1,0 +1,90 @@
+package repository
+
+import (
+	"context"
+
+	"github.com/sirupsen/logrus"
+	"{{.ModuleName}}/internal/domain"
+	"{{.ModuleName}}/internal/errors"
+	{{- if index .Includes "redis"}}
+	"{{.ModuleName}}/internal/infrastructure/redis"
+	{{- end}}
+)
+
+// CacheRepositoryImpl implements CacheRepository
+type CacheRepositoryImpl struct {
+	{{- if index .Includes "redis"}}
+	client *redis.Client
+	{{- end}}
+	log *logrus.Logger
+}
+
+// NewCacheRepository creates a new cache repository
+func NewCacheRepository({{- if index .Includes "redis"}}client *redis.Client, {{- end}}log *logrus.Logger) domain.CacheRepository {
+	return &CacheRepositoryImpl{
+		{{- if index .Includes "redis"}}
+		client: client,
+		{{- end}}
+		log: log,
+	}
+}
+
+// Get retrieves a value from cache
+func (r *CacheRepositoryImpl) Get(ctx context.Context, key string) (string, error) {
+	r.log.WithField("key", key).Debug("Getting value from cache")
+
+	{{- if index .Includes "redis"}}
+	client := r.client.Client()
+	val, err := client.Get(ctx, key).Result()
+	if err != nil {
+		appErr := errors.Cache("GET from cache", err).WithContext("key", key)
+		r.log.WithError(err).WithField("key", key).Warn("Failed to get value from cache")
+		return "", appErr
+	}
+	r.log.WithField("key", key).Debug("Value retrieved from cache")
+	return val, nil
+	{{- else}}
+	r.log.Warn("Cache not available")
+	return "", errors.Unavailable("Cache not available")
+	{{- end}}
+}
+
+// Set sets a value in cache
+func (r *CacheRepositoryImpl) Set(ctx context.Context, key string, value string) error {
+	r.log.WithField("key", key).Debug("Setting value in cache")
+
+	{{- if index .Includes "redis"}}
+	client := r.client.Client()
+	if err := client.Set(ctx, key, value, 0).Err(); err != nil {
+		appErr := errors.Cache("SET to cache", err).WithContext("key", key)
+		r.log.WithError(err).WithField("key", key).Error("Failed to set value in cache")
+		return appErr
+	}
+	r.log.WithField("key", key).Debug("Value set in cache successfully")
+	return nil
+	{{- else}}
+	r.log.Warn("Cache not available")
+	return errors.Unavailable("Cache not available")
+	{{- end}}
+}
+
+// Delete deletes a value from cache
+func (r *CacheRepositoryImpl) Delete(ctx context.Context, key string) error {
+	r.log.WithField("key", key).Debug("Deleting value from cache")
+
+	{{- if index .Includes "redis"}}
+	client := r.client.Client()
+	if err := client.Del(ctx, key).Err(); err != nil {
+		appErr := errors.Cache("DELETE from cache", err).WithContext("key", key)
+		r.log.WithError(err).WithField("key", key).Error("Failed to delete value from cache")
+		return appErr
+	}
+	r.log.WithField("key", key).Debug("Value deleted from cache successfully")
+	return nil
+	{{- else}}
+	r.log.Warn("Cache not available")
+	return errors.Unavailable("Cache not available")
+	{{- end}}
+}
+
+

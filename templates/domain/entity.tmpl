@@ -1,6 +1,8 @@
 package domain
 
-// User represents a user entity
+import "context"
+
+// User represents a user entity (Clean - no framework dependencies)
 type User struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
@@ -9,16 +11,16 @@ type User struct {
 
 // UserRepository defines the interface for user data operations
 type UserRepository interface {
-	GetByID(id int64) (*User, error)
-	Create(user *User) error
-	Update(user *User) error
-	Delete(id int64) error
+	GetByID(ctx context.Context, id int64) (*User, error)
+	Create(ctx context.Context, user *User) error
+	Update(ctx context.Context, user *User) error
+	Delete(ctx context.Context, id int64) error
 }
 
 // CacheRepository defines the interface for cache operations
 type CacheRepository interface {
-	Get(key string) (string, error)
-	Set(key string, value string) error
-	Delete(key string) error
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value string) error
+	Delete(ctx context.Context, key string) error
 }
 

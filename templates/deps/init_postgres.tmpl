@@ -1,0 +1,26 @@
+package deps
+
+import (
+	"context"
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/postgres"
+)
+
+// initPostgres initializes the PostgreSQL database connection
+func initPostgres(d *Deps, cfg *Config) error {
+	postgresCfg := cfg.Postgres
+	if postgresCfg == nil {
+		return fmt.Errorf("postgres config is required")
+	}
+	db, err := postgres.New(*postgresCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect postgres: %w", err)
+	}
+	if err := db.Ping(context.Background()); err != nil {
+		return fmt.Errorf("failed to ping postgres: %w", err)
+	}
+	d.DB = db
+	d.Log.Info("Postgres initialized successfully")
+	return nil
+}

@@ -1,0 +1,295 @@
+package repository
+
+import (
+	"context"
+
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+	"{{.ModuleName}}/internal/domain"
+	"{{.ModuleName}}/internal/errors"
+	"{{.ModuleName}}/internal/infrastructure/repository/models"
+	{{- if index .Includes "postgres"}}
+	"{{.ModuleName}}/internal/infrastructure/postgres"
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	"{{.ModuleName}}/internal/infrastructure/mysql"
+	{{- end}}
+	{{- if index .Includes "opentelemetry"}}
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	{{- end}}
+)
+
+// UserRepositoryImpl implements UserRepository
+// It handles database operations and converts between DB models and domain entities
+type UserRepositoryImpl struct {
+	{{- if index .Includes "postgres"}}
+	DB *postgres.DB
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	DB *mysql.DB
+	{{- end}}
+	{{- if index .Includes "opentelemetry"}}
+	tracer trace.Tracer
+	{{- end}}
+	log *logrus.Logger
+}
+
+// NewUserRepository creates a new user repository
+func NewUserRepository({{- if index .Includes "postgres"}}db *postgres.DB, {{- end}}{{- if index .Includes "mysql"}}db *mysql.DB, {{- end}}{{- if index .Includes "opentelemetry"}}tracer trace.Tracer, {{- end}}log *logrus.Logger) domain.UserRepository {
+	return &UserRepositoryImpl{
+		{{- if index .Includes "postgres"}}
+		DB: db,
+		{{- end}}
+		{{- if index .Includes "mysql"}}
+		DB: db,
+		{{- end}}
+		{{- if index .Includes "opentelemetry"}}
+		tracer: tracer,
+		{{- end}}
+		log: log,
+	}
+}
+
+// getDB returns the first available database connection (prefers postgres over mysql)
+func (r *UserRepositoryImpl) getDB() *gorm.DB {
+	{{- if index .Includes "postgres"}}
+	if r.DB != nil {
+		return r.DB.GORM()
+	}
+	{{- end}}
+	{{- if index .Includes "mysql"}}
+	if r.DB != nil {
+		return r.DB.GORM()
+	}
+	{{- end}}
+	return nil
+}
+
+// GetByID retrieves a user by ID
+// Converts from DB model to domain entity
+func (r *UserRepositoryImpl) GetByID(ctx context.Context, id int64) (*domain.User, error) {
+	r.log.WithFields(logrus.Fields{
+		"operation": "GetByID",
+		"user_id":   id,
+	}).Debug("Fetching user from database")
+
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := r.tracer.Start(ctx, "repository.GetByID")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.table", "users"),
+		attribute.Int64("user.id", id),
+	)
+	{{- end}}
+
+	db := r.getDB()
+	if db == nil {
+		appErr := errors.Unavailable("Database connection not available")
+		r.log.WithError(appErr).Error("Database connection not available")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "database not available")
+		{{- end}}
+		return nil, appErr
+	}
+	
+	// Query using DB model (with GORM tags)
+	var model models.UserModel
+	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(err)
+		{{- end}}
+		if err == gorm.ErrRecordNotFound {
+			appErr := errors.NotFound("User").WithContext("user_id", id)
+			r.log.WithFields(logrus.Fields{
+				"user_id": id,
+			}).Warn("User not found")
+			{{- if index .Includes "opentelemetry"}}
+			span.SetStatus(codes.Error, "user not found")
+			{{- end}}
+			return nil, appErr
+		}
+		appErr := errors.Database("SELECT user", err).WithContext("user_id", id)
+		r.log.WithError(err).WithField("user_id", id).Error("Failed to fetch user from database")
+		{{- if index .Includes "opentelemetry"}}
+		span.SetStatus(codes.Error, "database query failed")
+		{{- end}}
+		return nil, appErr
+	}
+
+	r.log.WithFields(logrus.Fields{
+		"user_id": model.ID,
+		"email":   model.Email,
+	}).Info("User retrieved successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user retrieved from database")
+	{{- end}}
+	
+	// Convert DB model to domain entity
+	return model.ToDomain(), nil
+}
+
+// Create creates a new user
+// Converts from domain entity to DB model
+func (r *UserRepositoryImpl) Create(ctx context.Context, user *domain.User) error {
+	r.log.WithFields(logrus.Fields{
+		"operation": "Create",
+		"email":     user.Email,
+		"name":      user.Name,
+	}).Debug("Creating new user in database")
+
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := r.tracer.Start(ctx, "repository.Create")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.operation", "INSERT"),
+		attribute.String("db.table", "users"),
+		attribute.String("user.email", user.Email),
+	)
+	{{- end}}
+
+	db := r.getDB()
+	if db == nil {
+		appErr := errors.Unavailable("Database connection not available")
+		r.log.WithError(appErr).Error("Database connection not available")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "database not available")
+		{{- end}}
+		return appErr
+	}
+	
+	// Convert domain entity to DB model
+	model := models.FromDomain(user)
+	
+	if err := db.WithContext(ctx).Create(model).Error; err != nil {
+		appErr := errors.Database("INSERT user", err).WithContext("user_email", user.Email)
+		r.log.WithError(err).WithFields(logrus.Fields{
+			"email": user.Email,
+			"name":  user.Name,
+		}).Error("Failed to create user in database")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "failed to create user")
+		{{- end}}
+		return appErr
+	}
+
+	// Update domain entity with generated ID
+	user.ID = model.ID
+
+	r.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("User created successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user created in database")
+	span.SetAttributes(attribute.Int64("user.id", user.ID))
+	{{- end}}
+	return nil
+}
+
+// Update updates an existing user
+// Converts from domain entity to DB model
+func (r *UserRepositoryImpl) Update(ctx context.Context, user *domain.User) error {
+	r.log.WithFields(logrus.Fields{
+		"operation": "Update",
+		"user_id":   user.ID,
+		"email":     user.Email,
+	}).Debug("Updating user in database")
+
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := r.tracer.Start(ctx, "repository.Update")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.operation", "UPDATE"),
+		attribute.String("db.table", "users"),
+		attribute.Int64("user.id", user.ID),
+	)
+	{{- end}}
+
+	db := r.getDB()
+	if db == nil {
+		appErr := errors.Unavailable("Database connection not available")
+		r.log.WithError(appErr).Error("Database connection not available")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "database not available")
+		{{- end}}
+		return appErr
+	}
+	
+	// Convert domain entity to DB model
+	model := models.FromDomain(user)
+	
+	if err := db.WithContext(ctx).Save(model).Error; err != nil {
+		appErr := errors.Database("UPDATE user", err).WithContext("user_id", user.ID)
+		r.log.WithError(err).WithField("user_id", user.ID).Error("Failed to update user in database")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "failed to update user")
+		{{- end}}
+		return appErr
+	}
+	
+	r.log.WithField("user_id", user.ID).Info("User updated successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user updated in database")
+	{{- end}}
+	return nil
+}
+
+// Delete deletes a user by ID
+func (r *UserRepositoryImpl) Delete(ctx context.Context, id int64) error {
+	r.log.WithFields(logrus.Fields{
+		"operation": "Delete",
+		"user_id":   id,
+	}).Debug("Deleting user from database")
+
+	{{- if index .Includes "opentelemetry"}}
+	ctx, span := r.tracer.Start(ctx, "repository.Delete")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.operation", "DELETE"),
+		attribute.String("db.table", "users"),
+		attribute.Int64("user.id", id),
+	)
+	{{- end}}
+
+	db := r.getDB()
+	if db == nil {
+		appErr := errors.Unavailable("Database connection not available")
+		r.log.WithError(appErr).Error("Database connection not available")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "database not available")
+		{{- end}}
+		return appErr
+	}
+	
+	// Delete using DB model
+	if err := db.WithContext(ctx).Delete(&models.UserModel{}, id).Error; err != nil {
+		appErr := errors.Database("DELETE user", err).WithContext("user_id", id)
+		r.log.WithError(err).WithField("user_id", id).Error("Failed to delete user from database")
+		{{- if index .Includes "opentelemetry"}}
+		span.RecordError(appErr)
+		span.SetStatus(codes.Error, "failed to delete user")
+		{{- end}}
+		return appErr
+	}
+	
+	r.log.WithField("user_id", id).Info("User deleted successfully")
+
+	{{- if index .Includes "opentelemetry"}}
+	span.SetStatus(codes.Ok, "user deleted from database")
+	{{- end}}
+	return nil
+}
+
+

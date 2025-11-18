@@ -1,0 +1,22 @@
+package deps
+
+import (
+	"fmt"
+
+	"{{.ModuleName}}/internal/infrastructure/rabbitmq"
+)
+
+// initRabbitMQ initializes the RabbitMQ connection
+func initRabbitMQ(d *Deps, cfg *Config) error {
+	rabbitmqCfg := cfg.RabbitMQ
+	if rabbitmqCfg == nil {
+		return fmt.Errorf("rabbitmq config is required")
+	}
+	conn, err := rabbitmq.NewConnection(rabbitmqCfg)
+	if err != nil {
+		return fmt.Errorf("failed to connect to rabbitmq: %w", err)
+	}
+	d.RabbitMQ = &rabbitmq.Connection{Conn: conn}
+	d.Log.Info("RabbitMQ initialized successfully")
+	return nil
+}

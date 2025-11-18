@@ -1,0 +1,69 @@
+package middleware
+
+import (
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/sirupsen/logrus"
+)
+
+// LoggingMiddleware logs HTTP requests with structured logging
+func LoggingMiddleware(logger *logrus.Logger) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			start := time.Now()
+
+			// Get request ID and trace ID from context
+			requestID := c.Get("request_id")
+			traceID := c.Get("trace_id")
+
+			// Log request start
+			fields := logrus.Fields{
+				"method":      c.Request().Method,
+				"path":        c.Request().URL.Path,
+				"remote_addr": c.RealIP(),
+				"user_agent":  c.Request().UserAgent(),
+			}
+			if requestID != nil {
+				fields["request_id"] = requestID
+			}
+			if traceID != nil {
+				fields["trace_id"] = traceID
+			}
+			logger.WithFields(fields).Info("Request started")
+
+			// Process request
+			err := next(c)
+
+			// Calculate duration
+			duration := time.Since(start)
+
+			// Log response
+			responseFields := logrus.Fields{
+				"method":      c.Request().Method,
+				"path":        c.Request().URL.Path,
+				"status_code": c.Response().Status,
+				"duration_ms": duration.Milliseconds(),
+			}
+			if requestID != nil {
+				responseFields["request_id"] = requestID
+			}
+			if traceID != nil {
+				responseFields["trace_id"] = traceID
+			}
+
+			// Log level based on status code
+			statusCode := c.Response().Status
+			if statusCode >= 500 {
+				logger.WithFields(responseFields).Error("Request completed with server error")
+			} else if statusCode >= 400 {
+				logger.WithFields(responseFields).Warn("Request completed with client error")
+			} else {
+				logger.WithFields(responseFields).Info("Request completed")
+			}
+
+			return err
+		}
+	}
+}
+
