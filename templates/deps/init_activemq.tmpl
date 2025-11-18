@@ -16,6 +16,7 @@ func initActiveMQ(d *Deps, cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to init activemq: %w", err)
 	}
+	// Config is already set in New() function
 	d.ActiveMQ = client
 	if d.Log != nil {
 		d.Log.Info("ActiveMQ initialized successfully")

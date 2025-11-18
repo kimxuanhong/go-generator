@@ -1,0 +1,221 @@
+package consumer
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/sirupsen/logrus"
+	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/usecase"
+	"{{.ModuleName}}/internal/infrastructure/rabbitmq"
+)
+
+// UserRabbitMQConsumer consumes User domain messages from RabbitMQ queue (Input Adapter)
+// Follows Clean Architecture: Adapter → Usecase → Repository
+// 
+// NOTE: This is an EXAMPLE for User domain.
+// For other domains (Order, Payment, etc.), copy this file:
+//   cp user_rabbitmq_consumer.go order_rabbitmq_consumer.go
+// Then rename struct, inject appropriate usecase, and update handlers.
+type UserRabbitMQConsumer struct {
+	deps *deps.Deps
+	log  *logrus.Logger
+	// Inject domain-specific usecase
+	userUsecase *usecase.UserUsecase
+}
+
+// NewUserRabbitMQConsumer creates a new RabbitMQ consumer for User domain
+// Queue name should be configured via environment or hardcoded for the domain
+func NewUserRabbitMQConsumer(d *deps.Deps, userUsecase *usecase.UserUsecase) *UserRabbitMQConsumer {
+	return &UserRabbitMQConsumer{
+		deps:        d,
+		log:         d.Log,
+		userUsecase: userUsecase,
+	}
+}
+
+// Run starts consuming messages from RabbitMQ
+// Should be run as a standalone goroutine in main.go
+func (c *UserRabbitMQConsumer) Run() {
+	ctx := context.Background()
+	
+	// Queue name from config (configured via environment)
+	queueName := c.deps.RabbitMQ.Config.QueueName
+	if queueName == "" {
+		queueName = "user-events" // Fallback default
+	}
+	
+	c.log.WithField("queue", queueName).Info("Starting RabbitMQ consumer")
+
+	if c.deps.RabbitMQ == nil {
+		c.log.Error("RabbitMQ connection not initialized")
+		return
+	}
+
+	// Create channel
+	ch, err := c.deps.RabbitMQ.Conn.Channel()
+	if err != nil {
+		c.log.WithError(err).Fatal("Failed to create RabbitMQ channel")
+		return
+	}
+	defer ch.Close()
+
+	// Declare queue (idempotent, durable=true for production)
+	q, err := rabbitmq.DeclareQueue(ch, queueName, true)
+	if err != nil {
+		c.log.WithError(err).Fatal("Failed to declare queue")
+		return
+	}
+
+	// Start consuming messages
+	msgs, err := rabbitmq.Consume(ch, q.Name, false)
+	if err != nil {
+		c.log.WithError(err).Fatal("Failed to start consuming")
+		return
+	}
+
+	c.log.WithField("queue", q.Name).Info("Waiting for messages... (Press Ctrl+C to exit)")
+
+	// Process messages
+	for msg := range msgs {
+		c.log.WithFields(logrus.Fields{
+			"delivery_tag": msg.DeliveryTag,
+			"timestamp":    msg.Timestamp,
+		}).Debug("Received message from RabbitMQ")
+
+		// Parse message
+		var event map[string]interface{}
+		if err := json.Unmarshal(msg.Body, &event); err != nil {
+			c.log.WithError(err).WithField("body", string(msg.Body)).Error("Failed to parse message")
+			msg.Nack(false, false) // Don't requeue invalid messages
+			continue
+		}
+
+		// Process the event
+		if err := c.processEvent(ctx, event); err != nil {
+			c.log.WithError(err).WithField("event", event).Error("Failed to process event")
+			msg.Nack(false, true) // Requeue for retry
+			continue
+		}
+
+		// Acknowledge successful processing
+		if err := msg.Ack(false); err != nil {
+			c.log.WithError(err).Error("Failed to acknowledge message")
+		} else {
+			c.log.WithField("delivery_tag", msg.DeliveryTag).Info("Message processed and acknowledged")
+		}
+	}
+}
+
+// processEvent handles the business logic for processing events
+func (c *UserRabbitMQConsumer) processEvent(ctx context.Context, event map[string]interface{}) error {
+	// Add timeout for processing
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Extract event data
+	eventType, ok := event["event_type"].(string)
+	if !ok {
+		c.log.Warn("Event missing event_type field")
+		eventType = "unknown"
+	}
+
+	c.log.WithFields(logrus.Fields{
+		"event_type": eventType,
+		"data":       event,
+	}).Info("Processing RabbitMQ event")
+
+	// TODO: Implement your business logic here
+	// Example: Call usecase methods, update database, send notifications, etc.
+	
+	// Simulate processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Example: Handle different event types
+	switch eventType {
+	case "user.created":
+		return c.handleUserCreated(ctx, event)
+	case "user.updated":
+		return c.handleUserUpdated(ctx, event)
+	case "user.deleted":
+		return c.handleUserDeleted(ctx, event)
+	default:
+		c.log.WithField("event_type", eventType).Warn("Unknown event type")
+		return nil
+	}
+}
+
+// handleUserCreated processes user.created events
+func (c *UserRabbitMQConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.created event")
+	
+	// Extract event data
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Error("Missing user_id in event")
+		return nil
+	}
+	
+	// Call usecase to get user details (Adapter → Usecase → Repository)
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).Error("Failed to get user from usecase")
+		return err
+	}
+	
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"name":    user.Name,
+	}).Info("User retrieved from usecase")
+	
+	// TODO: Implement additional business logic
+	// Example: 
+	// - Send welcome email via email service
+	// - Create user profile in analytics service
+	// - Update recommendation engine
+	
+	return nil
+}
+
+// handleUserUpdated processes user.updated events
+func (c *UserRabbitMQConsumer) handleUserUpdated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.updated event")
+	
+	// Extract event data
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Error("Missing user_id in event")
+		return nil
+	}
+	
+	// Call usecase to get updated user (Adapter → Usecase → Repository)
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).Error("Failed to get updated user")
+		return err
+	}
+	
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("Processing user update event")
+	
+	// TODO: Implement update propagation logic
+	// Example:
+	// - Update user in search index
+	// - Sync to CRM system
+	// - Update cache in other services
+	
+	return nil
+}
+
+// handleUserDeleted processes user.deleted events
+func (c *UserRabbitMQConsumer) handleUserDeleted(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.deleted event")
+	
+	// TODO: Implement user deletion logic
+	
+	return nil
+}

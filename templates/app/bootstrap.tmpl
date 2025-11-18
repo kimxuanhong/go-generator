@@ -2,7 +2,10 @@ package app
 
 import (
     {{- if index .Includes "cron"}}
-    "{{.ModuleName}}/internal/jobs"
+    "{{.ModuleName}}/internal/adapter/job"
+    {{- end}}
+    {{- if or (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq")}}
+    "{{.ModuleName}}/internal/adapter/consumer"
     {{- end}}
 
     "{{.ModuleName}}/internal/adapter/handler"
@@ -12,7 +15,7 @@ import (
     "{{.ModuleName}}/internal/deps"
 )
 
-// SetupDependencies initializes repositories, usecases, handlers and optional jobs.
+// SetupDependencies initializes repositories, usecases, handlers, consumers, and optional jobs.
 // BootstrapResult groups the initialized components returned by SetupDependencies.
 type BootstrapResult struct {
     UserRepo    domain.UserRepository
@@ -20,7 +23,16 @@ type BootstrapResult struct {
     UserUsecase *usecase.UserUsecase
     UserHandler *handler.UserHandler
     {{- if index .Includes "cron"}}
-    ExampleJob  *jobs.ExampleJob
+    ExampleJob  *job.ExampleJob
+    {{- end}}
+    {{- if index .Includes "rabbitmq"}}
+    UserRabbitConsumer *consumer.UserRabbitMQConsumer
+    {{- end}}
+    {{- if index .Includes "kafka"}}
+    UserKafkaConsumer *consumer.UserKafkaConsumer
+    {{- end}}
+    {{- if index .Includes "activemq"}}
+    UserActiveMQConsumer *consumer.UserActiveMQConsumer
     {{- end}}
 }
 
@@ -57,14 +69,19 @@ func SetupDependencies(d *deps.Deps) (*BootstrapResult, error) {
 
     // Optional job initialization (only if cron is enabled)
     {{- if index .Includes "cron"}}
-    var exampleJob *jobs.ExampleJob
-    {{- if or (index .Includes "postgres") (index .Includes "mysql")}}
-    exampleJob = jobs.NewExampleJob({{- if index .Includes "redis"}}d.Redis, {{- end}}d.DB)
-    {{- else if index .Includes "redis"}}
-    exampleJob = jobs.NewExampleJob(d.Redis)
-    {{- else}}
-    exampleJob = jobs.NewExampleJob()
+    exampleJob := job.NewExampleJob(d, d.Log)
     {{- end}}
+
+    // Initialize message queue consumers (Input Adapters - Domain specific)
+    // All config (queues, topics, brokers) is hardcoded per domain or loaded from deps
+    {{- if index .Includes "rabbitmq"}}
+    userRabbitConsumer := consumer.NewUserRabbitMQConsumer(d, userUsecase)
+    {{- end}}
+    {{- if index .Includes "kafka"}}
+    userKafkaConsumer := consumer.NewUserKafkaConsumer(d, userUsecase)
+    {{- end}}
+    {{- if index .Includes "activemq"}}
+    userActiveMQConsumer := consumer.NewUserActiveMQConsumer(d, userUsecase)
     {{- end}}
 
     // Pack results into a single struct to simplify the generated API.
@@ -75,6 +92,15 @@ func SetupDependencies(d *deps.Deps) (*BootstrapResult, error) {
         UserHandler: userHandler,
         {{- if index .Includes "cron"}}
         ExampleJob:  exampleJob,
+        {{- end}}
+        {{- if index .Includes "rabbitmq"}}
+        UserRabbitConsumer: userRabbitConsumer,
+        {{- end}}
+        {{- if index .Includes "kafka"}}
+        UserKafkaConsumer: userKafkaConsumer,
+        {{- end}}
+        {{- if index .Includes "activemq"}}
+        UserActiveMQConsumer: userActiveMQConsumer,
         {{- end}}
     }
 

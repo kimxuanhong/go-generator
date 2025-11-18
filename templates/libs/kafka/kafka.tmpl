@@ -19,6 +19,7 @@ type Config struct {
 type Client struct {
 	Reader *kafka.Reader
 	Writer *kafka.Writer
+	Config *Config
 }
 
 // New creates a new Kafka client with reader and writer (writer optional if no topic)
@@ -35,7 +36,7 @@ func New(cfg Config) (*Client, error) {
 		balancer = &kafka.Murmur2Balancer{}
 	}
 
-	cl := &Client{}
+	cl := &Client{Config: &cfg}
 	if cfg.Topic != "" {
 		cl.Writer = &kafka.Writer{
 			Addr:         kafka.TCP(cfg.Brokers...),

@@ -19,12 +19,28 @@ A Go project generated using the Go Project Generator with clean architecture pr
 {{- if .IncludeExample}}
 │   ├── domain/                   # Domain entities (pure business models)
 │   │   └── entity.go             # Business models
-│   ├── usecase/                  # Business logic
+│   ├── usecase/                  # Business logic (application layer)
 │   │   └── user_usecase.go       # User use cases
-│   ├── adapter/
-│   │   └── handler/              # HTTP handlers
-│   │       └── user_handler.go   # User HTTP endpoints
-│   ├── infrastructure/           # Infrastructure layer
+│   ├── adapter/                  # Adapters (input/output)
+│   │   ├── handler/              # HTTP handlers (input adapter)
+│   │   │   └── user_handler.go   # User HTTP endpoints
+{{- if index .Includes "cron"}}
+│   │   ├── job/                  # Scheduled jobs (input adapter)
+│   │   │   └── example_job.go    # Example cron job
+{{- end}}
+{{- if or (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq")}}
+│   │   └── consumer/             # Message consumers (input adapter)
+{{- if index .Includes "rabbitmq"}}
+│   │       ├── rabbitmq_consumer.go # RabbitMQ consumer
+{{- end}}
+{{- if index .Includes "kafka"}}
+│   │       ├── kafka_consumer.go    # Kafka consumer
+{{- end}}
+{{- if index .Includes "activemq"}}
+│   │       └── activemq_consumer.go # ActiveMQ consumer
+{{- end}}
+{{- end}}
+│   ├── infrastructure/           # Infrastructure layer (output adapters)
 │   │   └── repository/           # Data access implementations
 │   │       ├── user_repository.go    # User data operations
 │   │       ├── cache_repository.go   # Cache operations
@@ -36,10 +52,6 @@ A Go project generated using the Go Project Generator with clean architecture pr
 │   │   ├── logging.go            # Request/response logging
 │   │   ├── tracing.go            # Distributed tracing
 │   │   └── ratelimit.go          # Rate limiting
-{{- if index .Includes "cron"}}
-│   └── jobs/                     # Background jobs
-│       └── example_job.go        # Example cron job
-{{- end}}
 {{- end}}
 │   └── infrastructure/           # External services
 {{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "logrus") (index .Includes "resty") (index .Includes "mapstructure") (index .Includes "validator") (index .Includes "rabbitmq") (index .Includes "kafka") (index .Includes "activemq") (index .Includes "cron") (index .Includes "opentelemetry") }}
@@ -482,7 +494,10 @@ This project follows **Clean Architecture** principles with proper separation of
 
 - **Domain**: Pure business entities (no external dependencies, no GORM tags)
 - **Usecase**: Application-specific business rules
-- **Adapter/Handler**: HTTP request/response handling, DTOs with validation
+- **Adapter** (Input/Output Adapters):
+  - **Handler**: HTTP request/response handling, DTOs with validation
+  - **Job**: Scheduled jobs (cron)
+  - **Consumer**: Message queue consumers (RabbitMQ, Kafka)
 - **Infrastructure/Repository**: Data access implementations, database models
 - **Errors**: Custom structured error handling with `AppError`
 - **Middleware**: Cross-cutting concerns (logging, tracing, rate limiting)
@@ -490,14 +505,23 @@ This project follows **Clean Architecture** principles with proper separation of
 ### Dependency Flow
 
 ```
-HTTP Request → Middleware → Handler (DTO validation)
-                              ↓
-                          Usecase (business logic)
-                              ↓
-                          Repository (data access)
-                              ↓
-                          Database
+┌─────────── Input Adapters ───────────┐
+│ HTTP Request → Handler               │
+│ Cron Schedule → Job                  │
+│ Message Queue → Consumer             │
+└──────────────┬───────────────────────┘
+               ↓
+         Usecase (business logic)
+               ↓
+         Repository (data access)
+               ↓
+         Database/Cache
 ```
+
+**Clean Architecture Principle**: Dependencies point inward
+- Adapters depend on Usecases
+- Usecases depend on Domain
+- Infrastructure implements interfaces defined in Domain
 
 ### Key Design Patterns
 
@@ -710,29 +734,215 @@ Access the interactive API documentation at `http://localhost:8080/swagger/index
 {{- if index .Includes "rabbitmq"}}
 ### Using RabbitMQ
 
+> **Note**: When you select RabbitMQ, a consumer template is automatically generated at `internal/adapter/consumer/rabbitmq_consumer.go`. You can customize it for your use case.
+
+**Starting the RabbitMQ Consumer (Clean Architecture):**
+
+```go
+// In cmd/main.go or internal/app/bootstrap.go
+import (
+    "{{.ModuleName}}/internal/adapter/consumer"
+    "{{.ModuleName}}/internal/usecase"
+)
+
+// 1. Initialize usecases (business logic layer)
+userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo, d.Log)
+
+// 2. Inject usecase into consumer (dependency injection)
+if d.RabbitMQ != nil {
+    rabbitConsumer := consumer.NewRabbitMQConsumer(d, userUsecase)
+    
+    // Run as background goroutine
+    go rabbitConsumer.Run()
+    
+    log.Println("RabbitMQ consumer started")
+}
+```
+
+**Clean Architecture Flow:**
+```
+RabbitMQ Message → Consumer (Adapter) → Usecase (Business Logic) → Repository → Database
+```
+
+**Consumer calls usecase methods:**
+```go
+// Inside consumer handler
+func (c *RabbitMQConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+    userID := int64(event["user_id"].(float64))
+    
+    // Consumer calls usecase (following Clean Architecture)
+    user, err := c.userUsecase.GetUser(ctx, userID)
+    if err != nil {
+        return err
+    }
+    
+    // Additional business logic via usecases
+    return nil
+}
+```
+
+**Example 1: Producer - Publishing Messages**
+
 ```go
 // In your usecase or handler
-conn := d.RabbitMQ.Conn
-ch, err := d.RabbitMQ.Conn.Channel()
-if err != nil {
-    return err
+func (u *UserUsecase) PublishUserEvent(ctx context.Context, userID int64, event string) error {
+    u.log.WithFields(logrus.Fields{
+        "user_id": userID,
+        "event":   event,
+    }).Info("Publishing user event to RabbitMQ")
+
+    // Create a channel
+    ch, err := u.deps.RabbitMQ.Conn.Channel()
+    if err != nil {
+        u.log.WithError(err).Error("Failed to create RabbitMQ channel")
+        return fmt.Errorf("failed to create channel: %w", err)
+    }
+    defer ch.Close()
+
+    // Declare a queue (idempotent)
+    queueName := "user-events"
+    q, err := rabbitmq.DeclareQueue(ch, queueName, true)
+    if err != nil {
+        u.log.WithError(err).Error("Failed to declare queue")
+        return fmt.Errorf("failed to declare queue: %w", err)
+    }
+
+    // Prepare message
+    message := map[string]interface{}{
+        "user_id":   userID,
+        "event":     event,
+        "timestamp": time.Now().Unix(),
+    }
+    body, _ := json.Marshal(message)
+
+    // Publish message
+    err = rabbitmq.Publish(ch, q.Name, body)
+    if err != nil {
+        u.log.WithError(err).Error("Failed to publish message")
+        return fmt.Errorf("failed to publish: %w", err)
+    }
+
+    u.log.WithField("queue", q.Name).Info("Message published successfully")
+    return nil
 }
-defer ch.Close()
+```
 
-// Declare a queue
-q, err := rabbitmq.DeclareQueue(ch, "my-queue", true)
-if err != nil {
-    return err
+**Example 2: Consumer - Processing Messages**
+
+```go
+// In a background job or goroutine
+func (j *MessageConsumerJob) Run() {
+    ctx := context.Background()
+    j.log.Info("Starting RabbitMQ consumer")
+
+    ch, err := j.deps.RabbitMQ.Conn.Channel()
+    if err != nil {
+        j.log.WithError(err).Fatal("Failed to create channel")
+        return
+    }
+    defer ch.Close()
+
+    // Declare queue
+    queueName := "user-events"
+    q, err := rabbitmq.DeclareQueue(ch, queueName, true)
+    if err != nil {
+        j.log.WithError(err).Fatal("Failed to declare queue")
+        return
+    }
+
+    // Start consuming
+    msgs, err := rabbitmq.Consume(ch, q.Name, false)
+    if err != nil {
+        j.log.WithError(err).Fatal("Failed to start consuming")
+        return
+    }
+
+    j.log.WithField("queue", q.Name).Info("Waiting for messages...")
+
+    for msg := range msgs {
+        j.log.WithFields(logrus.Fields{
+            "delivery_tag": msg.DeliveryTag,
+            "body":         string(msg.Body),
+        }).Debug("Received message")
+
+        // Process message
+        var event map[string]interface{}
+        if err := json.Unmarshal(msg.Body, &event); err != nil {
+            j.log.WithError(err).Error("Failed to parse message")
+            msg.Nack(false, false) // Don't requeue invalid messages
+            continue
+        }
+
+        // Business logic here
+        if err := j.processEvent(ctx, event); err != nil {
+            j.log.WithError(err).Error("Failed to process event")
+            msg.Nack(false, true) // Requeue for retry
+            continue
+        }
+
+        // Acknowledge successful processing
+        msg.Ack(false)
+        j.log.Info("Message processed successfully")
+    }
 }
 
-// Publish a message
-err = rabbitmq.Publish(ch, "my-queue", []byte(`{"data":"value"}`))
+func (j *MessageConsumerJob) processEvent(ctx context.Context, event map[string]interface{}) error {
+    // Your business logic
+    userID := int64(event["user_id"].(float64))
+    eventType := event["event"].(string)
+    
+    j.log.WithFields(logrus.Fields{
+        "user_id": userID,
+        "event":   eventType,
+    }).Info("Processing event")
+    
+    // Call usecase, repository, etc.
+    return nil
+}
+```
 
-// Consume messages
-msgs, err := rabbitmq.Consume(ch, "my-queue", false)
-for msg := range msgs {
-    // Process message
-    msg.Ack(false)
+**Example 3: Producer + Consumer Pattern**
+
+```go
+// Complete example: Async task processing
+type TaskProcessor struct {
+    deps *deps.Deps
+    log  *logrus.Logger
+}
+
+func (t *TaskProcessor) SubmitTask(ctx context.Context, taskData interface{}) error {
+    // Producer: Submit task to queue
+    ch, err := t.deps.RabbitMQ.Conn.Channel()
+    if err != nil {
+        return err
+    }
+    defer ch.Close()
+
+    q, _ := rabbitmq.DeclareQueue(ch, "tasks", true)
+    body, _ := json.Marshal(taskData)
+    
+    return rabbitmq.Publish(ch, q.Name, body)
+}
+
+func (t *TaskProcessor) StartWorker(ctx context.Context) {
+    // Consumer: Process tasks from queue
+    ch, _ := t.deps.RabbitMQ.Conn.Channel()
+    defer ch.Close()
+
+    q, _ := rabbitmq.DeclareQueue(ch, "tasks", true)
+    msgs, _ := rabbitmq.Consume(ch, q.Name, false)
+
+    for msg := range msgs {
+        var taskData map[string]interface{}
+        json.Unmarshal(msg.Body, &taskData)
+        
+        // Process task
+        if err := t.executeTask(ctx, taskData); err != nil {
+            msg.Nack(false, true) // Requeue
+        } else {
+            msg.Ack(false)
+        }
+    }
 }
 ```
 
@@ -740,67 +950,623 @@ for msg := range msgs {
 {{- if index .Includes "cron"}}
 ### Using Cron Jobs
 
-Jobs are initialized in `internal/app/bootstrap.go` and registered in `cmd/main.go`.
+Jobs are located in `internal/adapter/job/` and registered in `cmd/main.go`.
 
-Add a new job:
+**Example job structure:**
 
 ```go
-// In internal/jobs/my_job.go
+// In internal/adapter/job/my_job.go
+package job
+
 type MyJob struct {
-    // dependencies
+    deps *deps.Deps
+    log  *logrus.Logger
+}
+
+func NewMyJob(d *deps.Deps) *MyJob {
+    return &MyJob{
+        deps: d,
+        log:  d.Log,
+    }
 }
 
 func (j *MyJob) Run() {
-    // Job logic
+    j.log.Info("Starting my custom job")
+    // Job logic here
 }
 
 // In cmd/main.go
-_, err := d.Cron.AddJob("0 * * * *", &jobs.MyJob{})
+import "{{.ModuleName}}/internal/adapter/job"
+
+myJob := job.NewMyJob(d)
+_, err := d.Cron.AddJob("0 * * * *", myJob)
+```
+
+**Cron schedule examples:**
+```
+"*/5 * * * *"     # Every 5 minutes
+"0 * * * *"       # Every hour
+"0 0 * * *"       # Every day at midnight
+"0 9 * * MON-FRI" # Weekdays at 9 AM
+"@hourly"         # Every hour (shorthand)
+"@daily"          # Every day at midnight
 ```
 
 {{- end}}
 {{- if index .Includes "kafka"}}
 ### Using Kafka
 
-```go
-// Produce a message
-if d.Kafka != nil {
-    err := d.Kafka.Produce(context.Background(), []byte("key"), []byte(`{"event":"demo"}`))
-    if err != nil {
-        d.Log.Errorf("failed to produce kafka message: %v", err)
-    }
-}
+> **Note**: When you select Kafka, a consumer template is automatically generated at `internal/adapter/consumer/kafka_consumer.go`. You can customize it for your use case.
 
-// Consume messages
+**Starting the Kafka Consumer (Clean Architecture):**
+
+```go
+// In cmd/main.go or internal/app/bootstrap.go
+import (
+    "{{.ModuleName}}/internal/adapter/consumer"
+    "{{.ModuleName}}/internal/usecase"
+)
+
+// 1. Initialize usecases (business logic layer)
+userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo, d.Log)
+
+// 2. Inject usecase into consumer (dependency injection)
 if d.Kafka != nil {
-    msg, err := d.Kafka.Reader.ReadMessage(ctx)
+    kafkaConsumer := consumer.NewKafkaConsumer(d, userUsecase)
+    
+    // Run as background goroutine
+    go kafkaConsumer.Run()
+    
+    log.Printf("Kafka consumer started (topic: %s, group: %s)", 
+        d.Kafka.Topic, d.Kafka.GroupID)
+}
+```
+
+**Clean Architecture Flow:**
+```
+Kafka Message → Consumer (Adapter) → Usecase (Business Logic) → Repository → Database
+```
+
+**Consumer calls usecase methods:**
+```go
+// Inside consumer handler
+func (c *KafkaConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+    userID := int64(event["user_id"].(float64))
+    
+    // Consumer calls usecase (following Clean Architecture)
+    user, err := c.userUsecase.GetUser(ctx, userID)
     if err != nil {
         return err
     }
-    d.Log.Infof("received message: %s", string(msg.Value))
+    
+    // All business logic goes through usecases
+    return nil
 }
 ```
+
+**Graceful Shutdown (Recommended):**
+
+```go
+// In cmd/main.go
+func main() {
+    // ... setup dependencies ...
+    
+    // Start Kafka consumer
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    
+    if d.Kafka != nil {
+        kafkaConsumer := consumer.NewKafkaConsumer(d)
+        go kafkaConsumer.RunWithContext(ctx) // Implement this method
+    }
+    
+    // Wait for interrupt signal
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    <-sigChan
+    
+    log.Println("Shutting down gracefully...")
+    cancel() // Cancel context to stop consumer
+    time.Sleep(5 * time.Second) // Wait for cleanup
+}
+```
+
+**Example 1: Producer - Publishing Messages**
+
+```go
+// In your usecase
+func (u *UserUsecase) PublishUserEvent(ctx context.Context, userID int64, event string) error {
+    u.log.WithFields(logrus.Fields{
+        "user_id": userID,
+        "event":   event,
+    }).Info("Publishing event to Kafka")
+
+    // Prepare message
+    message := map[string]interface{}{
+        "user_id":   userID,
+        "event":     event,
+        "timestamp": time.Now().Unix(),
+    }
+    body, _ := json.Marshal(message)
+
+    // Create key for partitioning
+    key := []byte(fmt.Sprintf("user-%d", userID))
+
+    // Produce message
+    err := u.deps.Kafka.Produce(ctx, key, body)
+    if err != nil {
+        u.log.WithError(err).Error("Failed to produce Kafka message")
+        return fmt.Errorf("failed to produce to kafka: %w", err)
+    }
+
+    u.log.WithFields(logrus.Fields{
+        "topic":  u.deps.Kafka.Topic,
+        "key":    string(key),
+    }).Info("Message published to Kafka successfully")
+
+    return nil
+}
+```
+
+**Example 2: Consumer - Processing Messages**
+
+```go
+// In a background job
+func (j *KafkaConsumerJob) Run() {
+    ctx := context.Background()
+    j.log.Info("Starting Kafka consumer")
+
+    if j.deps.Kafka == nil {
+        j.log.Error("Kafka not initialized")
+        return
+    }
+
+    j.log.WithFields(logrus.Fields{
+        "topic":    j.deps.Kafka.Topic,
+        "group_id": j.deps.Kafka.GroupID,
+    }).Info("Consuming messages from Kafka")
+
+    for {
+        // Read message
+        msg, err := j.deps.Kafka.Reader.ReadMessage(ctx)
+        if err != nil {
+            j.log.WithError(err).Error("Failed to read Kafka message")
+            time.Sleep(time.Second) // Backoff
+            continue
+        }
+
+        j.log.WithFields(logrus.Fields{
+            "topic":     msg.Topic,
+            "partition": msg.Partition,
+            "offset":    msg.Offset,
+            "key":       string(msg.Key),
+        }).Debug("Received Kafka message")
+
+        // Process message
+        var event map[string]interface{}
+        if err := json.Unmarshal(msg.Value, &event); err != nil {
+            j.log.WithError(err).Error("Failed to parse message")
+            continue // Skip invalid message
+        }
+
+        // Business logic
+        if err := j.processEvent(ctx, event); err != nil {
+            j.log.WithError(err).Error("Failed to process event")
+            // Kafka auto-commits, or you can implement retry logic
+            continue
+        }
+
+        j.log.WithFields(logrus.Fields{
+            "offset": msg.Offset,
+            "key":    string(msg.Key),
+        }).Info("Message processed successfully")
+    }
+}
+
+func (j *KafkaConsumerJob) processEvent(ctx context.Context, event map[string]interface{}) error {
+    userID := int64(event["user_id"].(float64))
+    eventType := event["event"].(string)
+
+    j.log.WithFields(logrus.Fields{
+        "user_id": userID,
+        "event":   eventType,
+    }).Info("Processing Kafka event")
+
+    // Call usecase, repository, etc.
+    return nil
+}
+```
+
+**Example 3: Event-Driven Architecture Pattern**
+
+```go
+// Complete example: User service publishes, notification service consumes
+
+// 1. User Service: Produce event when user is created
+func (u *UserUsecase) CreateUser(ctx context.Context, user *domain.User) error {
+    // Create user in database
+    if err := u.userRepo.Create(ctx, user); err != nil {
+        return err
+    }
+
+    // Publish event to Kafka
+    event := map[string]interface{}{
+        "event_type": "user.created",
+        "user_id":    user.ID,
+        "email":      user.Email,
+        "name":       user.Name,
+        "created_at": time.Now().Unix(),
+    }
+    eventData, _ := json.Marshal(event)
+    key := []byte(fmt.Sprintf("user-%d", user.ID))
+
+    if err := u.deps.Kafka.Produce(ctx, key, eventData); err != nil {
+        u.log.WithError(err).Error("Failed to publish user.created event")
+        // Non-critical: Don't fail user creation if event publishing fails
+    }
+
+    u.log.WithField("user_id", user.ID).Info("User created and event published")
+    return nil
+}
+
+// 2. Notification Service: Consume events and send notifications
+type NotificationConsumer struct {
+    deps *deps.Deps
+    log  *logrus.Logger
+}
+
+func (n *NotificationConsumer) Start(ctx context.Context) {
+    n.log.Info("Starting notification consumer")
+
+    for {
+        msg, err := n.deps.Kafka.Reader.ReadMessage(ctx)
+        if err != nil {
+            n.log.WithError(err).Error("Failed to read message")
+            continue
+        }
+
+        var event map[string]interface{}
+        json.Unmarshal(msg.Value, &event)
+
+        eventType := event["event_type"].(string)
+
+        switch eventType {
+        case "user.created":
+            n.sendWelcomeEmail(ctx, event)
+        case "user.updated":
+            n.sendUpdateNotification(ctx, event)
+        default:
+            n.log.WithField("event_type", eventType).Warn("Unknown event type")
+        }
+    }
+}
+
+func (n *NotificationConsumer) sendWelcomeEmail(ctx context.Context, event map[string]interface{}) error {
+    email := event["email"].(string)
+    name := event["name"].(string)
+
+    n.log.WithFields(logrus.Fields{
+        "email": email,
+        "name":  name,
+    }).Info("Sending welcome email")
+
+    // Send email logic here
+    return nil
+}
+```
+
+**Example 4: Parallel Producer/Consumer**
+
+```go
+// Run producer and consumer in parallel (e.g., in cmd/main.go)
+func setupKafka(d *deps.Deps) {
+    // Start consumer in goroutine
+    go func() {
+        consumer := &KafkaConsumerJob{deps: d, log: d.Log}
+        consumer.Run()
+    }()
+
+    // Producer is called on-demand from usecases
+    // e.g., when user performs an action
+}
+```
+
+**Configuration for Kafka:**
+
+```json
+{
+  "kafka": {
+    "brokers": ["localhost:9092"],
+    "topic": "user-events",
+    "groupid": "user-service-group",
+    "balancer": "hash"
+  }
+}
+```
+
+**Environment variables:**
+```bash
+KAFKA_BROKERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+KAFKA_TOPIC=production-events
+KAFKA_GROUPID=production-consumer-group
+```
+
 {{- end}}
 
 {{- if index .Includes "activemq"}}
 ### Using ActiveMQ (STOMP)
 
-```go
-if d.ActiveMQ != nil {
-    // Subscribe
-    sub, err := d.ActiveMQ.Conn.Subscribe("/queue/example", stomp.AckAuto)
-    if err != nil {
-        return err
-    }
-    defer sub.Unsubscribe()
+> **Note**: When you select ActiveMQ, a consumer template is automatically generated at `internal/adapter/consumer/activemq_consumer.go`. You can customize it for your use case.
 
-    // Send a message
-    err = d.ActiveMQ.Conn.Send("/queue/example", "application/json", []byte(`{"hello":"world"}`))
-    if err != nil {
-        return err
-    }
+**Starting the ActiveMQ Consumer (Clean Architecture):**
+
+```go
+// In cmd/main.go or internal/app/bootstrap.go
+import (
+    "{{.ModuleName}}/internal/adapter/consumer"
+    "{{.ModuleName}}/internal/usecase"
+)
+
+// 1. Initialize usecases (business logic layer)
+userUsecase := usecase.NewUserUsecase(userRepo, cacheRepo, d.Log)
+
+// 2. Inject usecase into consumer (dependency injection)
+if d.ActiveMQ != nil {
+    activemqConsumer := consumer.NewActiveMQConsumer(d, userUsecase)
+    
+    // Run as background goroutine
+    go activemqConsumer.Run()
+    
+    log.Println("ActiveMQ consumer started")
 }
 ```
+
+**Clean Architecture Flow:**
+```
+ActiveMQ Message → Consumer (Adapter) → Usecase (Business Logic) → Repository → Database
+```
+
+**Consumer calls usecase methods:**
+```go
+// Inside consumer handler
+func (c *ActiveMQConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+    userID := int64(event["user_id"].(float64))
+    
+    // Consumer calls usecase (following Clean Architecture)
+    user, err := c.userUsecase.GetUser(ctx, userID)
+    if err != nil {
+        return err
+    }
+    
+    // Additional business logic via usecases
+    return nil
+}
+```
+
+**Example 1: Producer - Sending Messages**
+
+```go
+// In your usecase or handler
+func (u *UserUsecase) PublishUserEvent(ctx context.Context, userID int64, event string) error {
+    u.log.WithFields(logrus.Fields{
+        "user_id": userID,
+        "event":   event,
+    }).Info("Publishing user event to ActiveMQ")
+
+    if u.deps.ActiveMQ == nil {
+        return fmt.Errorf("activemq not initialized")
+    }
+
+    // Prepare message
+    message := map[string]interface{}{
+        "type":      event,
+        "user_id":   userID,
+        "timestamp": time.Now().Format(time.RFC3339),
+    }
+    body, _ := json.Marshal(message)
+
+    // Send to queue (STOMP protocol)
+    destination := "/queue/user-events"
+    err := u.deps.ActiveMQ.Conn.Send(
+        destination,
+        "application/json",
+        body,
+        stomp.SendOpt.Header("persistent", "true"),
+    )
+    
+    if err != nil {
+        u.log.WithError(err).Error("Failed to send message to ActiveMQ")
+        return fmt.Errorf("failed to send message: %w", err)
+    }
+
+    u.log.WithField("destination", destination).Info("Message sent successfully")
+    return nil
+}
+```
+
+**Example 2: Consumer - Processing Messages**
+
+```go
+// The generated consumer template handles this automatically
+// Located at: internal/adapter/consumer/activemq_consumer.go
+
+// Example custom event handler:
+func (c *ActiveMQConsumer) handleOrderPlaced(ctx context.Context, event map[string]interface{}) error {
+    orderID, ok := event["order_id"].(string)
+    if !ok {
+        c.log.Warn("Invalid order_id in event")
+        return nil
+    }
+
+    c.log.WithField("order_id", orderID).Info("Processing order.placed event")
+
+    // Call usecase for business logic
+    // Example: Update inventory, send notification, etc.
+    
+    return nil
+}
+```
+
+**Example 3: Topic Publish/Subscribe Pattern**
+
+```go
+// Publisher
+func (u *UserUsecase) BroadcastEvent(ctx context.Context, topic string, data interface{}) error {
+    body, _ := json.Marshal(data)
+    
+    // Use /topic/ prefix for pub/sub pattern
+    destination := fmt.Sprintf("/topic/%s", topic)
+    
+    err := u.deps.ActiveMQ.Conn.Send(
+        destination,
+        "application/json",
+        body,
+    )
+    
+    return err
+}
+
+// Subscriber
+func (c *ActiveMQConsumer) SubscribeToTopic(topic string) error {
+    destination := fmt.Sprintf("/topic/%s", topic)
+    
+    sub, err := c.deps.ActiveMQ.Conn.Subscribe(
+        destination,
+        stomp.AckClientIndividual,
+    )
+    if err != nil {
+        return err
+    }
+    
+    // Process messages
+    go func() {
+        for msg := range sub.C {
+            if msg == nil {
+                break
+            }
+            
+            // Process message
+            c.log.WithField("topic", topic).Debug("Received message from topic")
+            
+            // ACK
+            c.deps.ActiveMQ.Conn.Ack(msg)
+        }
+    }()
+    
+    return nil
+}
+```
+
+**Example 4: Request-Reply Pattern**
+
+```go
+// Client (Request)
+func (u *UserUsecase) SendRequest(ctx context.Context, requestData interface{}) (interface{}, error) {
+    replyQueue := "/queue/reply-" + uuid.New().String()
+    
+    // Subscribe to reply queue
+    sub, err := u.deps.ActiveMQ.Conn.Subscribe(replyQueue, stomp.AckAuto)
+    if err != nil {
+        return nil, err
+    }
+    defer sub.Unsubscribe()
+    
+    // Send request with reply-to header
+    body, _ := json.Marshal(requestData)
+    err = u.deps.ActiveMQ.Conn.Send(
+        "/queue/requests",
+        "application/json",
+        body,
+        stomp.SendOpt.Header("reply-to", replyQueue),
+    )
+    if err != nil {
+        return nil, err
+    }
+    
+    // Wait for reply (with timeout)
+    select {
+    case msg := <-sub.C:
+        var response interface{}
+        json.Unmarshal(msg.Body, &response)
+        return response, nil
+    case <-time.After(5 * time.Second):
+        return nil, fmt.Errorf("request timeout")
+    }
+}
+
+// Server (Reply)
+func (c *ActiveMQConsumer) handleRequest(msg *stomp.Message) error {
+    replyTo := msg.Header.Get("reply-to")
+    
+    // Process request
+    var request map[string]interface{}
+    json.Unmarshal(msg.Body, &request)
+    
+    // Prepare response
+    response := map[string]interface{}{
+        "status": "success",
+        "data":   "processed",
+    }
+    body, _ := json.Marshal(response)
+    
+    // Send reply
+    return c.deps.ActiveMQ.Conn.Send(replyTo, "application/json", body)
+}
+```
+
+**Graceful Shutdown:**
+
+```go
+// In main.go
+func main() {
+    // ... initialization ...
+    
+    // Start consumer
+    if d.ActiveMQ != nil {
+        activemqConsumer := consumer.NewActiveMQConsumer(d, userUsecase)
+        go activemqConsumer.Run()
+    }
+    
+    // Wait for interrupt signal
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+    
+    log.Println("Shutting down gracefully...")
+    
+    // Close ActiveMQ connection
+    if d.ActiveMQ != nil {
+        if err := d.ActiveMQ.Close(); err != nil {
+            log.Printf("Error closing ActiveMQ: %v", err)
+        }
+    }
+    
+    log.Println("Shutdown complete")
+}
+```
+
+**Key Features:**
+
+1. **STOMP Protocol**: Uses `github.com/go-stomp/stomp` for connectivity
+2. **Queue & Topic Support**: 
+   - `/queue/name` for point-to-point messaging
+   - `/topic/name` for publish-subscribe pattern
+3. **Message Acknowledgment**: 
+   - `stomp.AckAuto` for automatic ACK
+   - `stomp.AckClientIndividual` for manual ACK/NACK
+4. **Clean Architecture**: Consumers call usecases for business logic
+5. **Context Propagation**: Context passed through all layers
+6. **Structured Logging**: Logrus with contextual fields
+
+**Configuration:**
+
+```yaml
+activemq:
+  addr: "localhost:61613"      # STOMP port
+  login: "admin"               # Username (optional)
+  passcode: "admin"            # Password (optional)
+```
+
 {{- end}}
 
 ## Testing

@@ -77,14 +77,50 @@ func (s *GeneratorService) renderHandlerLayer(tmp string, req *GenerateRequest, 
 	return s.renderTemplate(constants.TemplateUserHandler, outPath, data)
 }
 
-// renderJobsLayer renders the jobs layer templates
+// renderJobsLayer renders the scheduled jobs layer templates (Input Adapter: Jobs)
 func (s *GeneratorService) renderJobsLayer(tmp string, req *GenerateRequest, includes map[string]bool) error {
-	outPath := filepath.Join(tmp, constants.DirInternalJobs, "example_job.go")
 	data := map[string]interface{}{
 		"ModuleName": req.ModuleName,
 		"Includes":   includes,
 	}
-	return s.renderTemplate(constants.TemplateExampleJob, outPath, data)
+
+	// Render example job (Adapter: Scheduled Jobs)
+	jobPath := filepath.Join(tmp, constants.DirInternalJob, "example_job.go")
+	return s.renderTemplate(constants.TemplateExampleJob, jobPath, data)
+}
+
+// renderConsumersLayer renders the message queue consumers layer templates (Input Adapter: Consumers)
+func (s *GeneratorService) renderConsumersLayer(tmp string, req *GenerateRequest, includes map[string]bool) error {
+	data := map[string]interface{}{
+		"ModuleName": req.ModuleName,
+		"Includes":   includes,
+	}
+
+	// Render RabbitMQ consumer if RabbitMQ is included (Adapter: Message Consumer)
+	if includes["rabbitmq"] {
+		rabbitPath := filepath.Join(tmp, constants.DirInternalConsumer, "user_rabbitmq_consumer.go")
+		if err := s.renderTemplate(constants.TemplateRabbitMQConsumer, rabbitPath, data); err != nil {
+			return err
+		}
+	}
+
+	// Render Kafka consumer if Kafka is included (Adapter: Message Consumer)
+	if includes["kafka"] {
+		kafkaPath := filepath.Join(tmp, constants.DirInternalConsumer, "user_kafka_consumer.go")
+		if err := s.renderTemplate(constants.TemplateKafkaConsumer, kafkaPath, data); err != nil {
+			return err
+		}
+	}
+
+	// Render ActiveMQ consumer if ActiveMQ is included (Adapter: Message Consumer)
+	if includes["activemq"] {
+		activemqPath := filepath.Join(tmp, constants.DirInternalConsumer, "user_activemq_consumer.go")
+		if err := s.renderTemplate(constants.TemplateActiveMQConsumer, activemqPath, data); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // renderAppServer renders the app server templates

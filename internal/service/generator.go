@@ -143,6 +143,13 @@ func (s *GeneratorService) GenerateProject(req *GenerateRequest) ([]byte, error)
 				return nil, errors.ErrTemplate("Failed to render jobs layer", err)
 			}
 		}
+
+		// Consumers layer (if RabbitMQ, Kafka, or ActiveMQ is included)
+		if includes["rabbitmq"] || includes["kafka"] || includes["activemq"] {
+			if err := s.renderConsumersLayer(tmp, req, includes); err != nil {
+				return nil, errors.ErrTemplate("Failed to render consumers layer", err)
+			}
+		}
 	}
 
 	// App server (always render, but with or without example routes)

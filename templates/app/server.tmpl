@@ -57,6 +57,26 @@ func NewServer(d *deps.Deps) (*Server, error) {
 	}
 	{{- end}}
 
+	// Start message queue consumers (Input Adapters - Domain specific)
+	{{- if index .Includes "rabbitmq"}}
+	if res.UserRabbitConsumer != nil && d.RabbitMQ != nil {
+		go res.UserRabbitConsumer.Run()
+		d.Log.Info("User RabbitMQ consumer started")
+	}
+	{{- end}}
+	{{- if index .Includes "kafka"}}
+	if res.UserKafkaConsumer != nil && d.Kafka != nil {
+		go res.UserKafkaConsumer.Run()
+		d.Log.Info("User Kafka consumer started")
+	}
+	{{- end}}
+	{{- if index .Includes "activemq"}}
+	if res.UserActiveMQConsumer != nil && d.ActiveMQ != nil {
+		go res.UserActiveMQConsumer.Run()
+		d.Log.Info("User ActiveMQ consumer started")
+	}
+	{{- end}}
+
 	{{- if eq .Framework "fiber"}}
 	app := fiber.New()
 	

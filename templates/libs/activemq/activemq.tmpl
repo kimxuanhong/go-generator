@@ -8,14 +8,16 @@ import (
 
 // Config for ActiveMQ STOMP connection
 type Config struct {
-	Addr     string `json:"addr" mapstructure:"addr"`
-	Login    string `json:"login" mapstructure:"login"`
-	Passcode string `json:"passcode" mapstructure:"passcode"`
+	Addr      string `json:"addr" mapstructure:"addr"`
+	Login     string `json:"login" mapstructure:"login"`
+	Passcode  string `json:"passcode" mapstructure:"passcode"`
+	QueueName string `json:"queue_name" mapstructure:"queue_name"`
 }
 
 // Client wraps the STOMP connection
 type Client struct {
-	Conn *stomp.Conn
+	Conn   *stomp.Conn
+	Config Config
 }
 
 // New creates a STOMP connection
@@ -28,7 +30,10 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{Conn: conn}, nil
+	return &Client{
+		Conn:   conn,
+		Config: cfg,
+	}, nil
 }
 
 // Close closes the connection

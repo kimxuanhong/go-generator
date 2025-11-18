@@ -1,0 +1,259 @@
+package consumer
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/go-stomp/stomp"
+	"github.com/sirupsen/logrus"
+	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/usecase"
+)
+
+// UserActiveMQConsumer consumes User domain messages from ActiveMQ queue (Input Adapter)
+// Follows Clean Architecture: Adapter → Usecase → Repository
+// 
+// NOTE: This is an EXAMPLE for User domain.
+// For other domains (Order, Payment, etc.), copy this file:
+//   cp user_activemq_consumer.go order_activemq_consumer.go
+// Then rename struct, inject appropriate usecase, and update handlers.
+type UserActiveMQConsumer struct {
+	deps *deps.Deps
+	log  *logrus.Logger
+	// Inject domain-specific usecase
+	userUsecase *usecase.UserUsecase
+}
+
+// NewUserActiveMQConsumer creates a new ActiveMQ consumer for User domain
+// Queue/topic destination should be configured for the specific domain
+func NewUserActiveMQConsumer(d *deps.Deps, userUsecase *usecase.UserUsecase) *UserActiveMQConsumer {
+	return &UserActiveMQConsumer{
+		deps:        d,
+		log:         d.Log,
+		userUsecase: userUsecase,
+	}
+}
+
+// Run starts consuming messages from ActiveMQ
+// Should be run as a standalone goroutine in main.go
+func (c *UserActiveMQConsumer) Run() {
+	ctx := context.Background()
+	
+	// Queue/topic destination from config (configured via environment)
+	destination := c.deps.ActiveMQ.Config.QueueName
+	if destination == "" {
+		destination = "/queue/user-events" // Fallback default
+	}
+	
+	c.log.WithField("destination", destination).Info("Starting ActiveMQ consumer")
+
+	if c.deps.ActiveMQ == nil {
+		c.log.Error("ActiveMQ connection not initialized")
+		return
+	}
+
+	// Subscribe to queue
+	sub, err := c.deps.ActiveMQ.Conn.Subscribe(destination, stomp.AckClientIndividual)
+	if err != nil {
+		c.log.WithError(err).Error("Failed to subscribe to ActiveMQ queue")
+		return
+	}
+	defer sub.Unsubscribe()
+
+	c.log.WithField("destination", destination).Info("Successfully subscribed to ActiveMQ destination")
+
+	// Start consuming messages
+	for {
+		select {
+		case msg := <-sub.C:
+			if msg == nil {
+				c.log.Warn("Received nil message from ActiveMQ, subscription closed")
+				return
+			}
+
+			c.log.WithFields(logrus.Fields{
+				"message_id":  msg.Header.Get("message-id"),
+				"destination": msg.Destination,
+			}).Debug("Received message from ActiveMQ")
+
+			// Process message
+			if err := c.processMessage(ctx, msg); err != nil {
+				c.log.WithError(err).WithField("message_id", msg.Header.Get("message-id")).Error("Failed to process message")
+				// NACK the message (reject without requeue)
+				if err := c.deps.ActiveMQ.Conn.Nack(msg); err != nil {
+					c.log.WithError(err).Error("Failed to NACK message")
+				}
+			} else {
+				// ACK the message on success
+				if err := c.deps.ActiveMQ.Conn.Ack(msg); err != nil {
+					c.log.WithError(err).Error("Failed to ACK message")
+				}
+			}
+		}
+	}
+}
+
+// processMessage processes a single ActiveMQ message
+func (c *UserActiveMQConsumer) processMessage(ctx context.Context, msg *stomp.Message) error {
+	// Add timeout for processing
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	c.log.WithFields(logrus.Fields{
+		"message_id":  msg.Header.Get("message-id"),
+		"body_size":   len(msg.Body),
+		"destination": msg.Destination,
+	}).Info("Processing ActiveMQ message")
+
+	// Parse message body (assuming JSON)
+	var event map[string]interface{}
+	if err := json.Unmarshal(msg.Body, &event); err != nil {
+		c.log.WithError(err).Warn("Failed to parse message body as JSON")
+		return err
+	}
+
+	// Extract event type
+	eventType, ok := event["type"].(string)
+	if !ok {
+		c.log.Warn("Message missing 'type' field")
+		return nil // Skip invalid messages
+	}
+
+	c.log.WithFields(logrus.Fields{
+		"event_type": eventType,
+		"event_data": event,
+	}).Debug("Parsed event from ActiveMQ")
+
+	// Route to appropriate handler based on event type
+	switch eventType {
+	case "user.created":
+		return c.handleUserCreated(ctx, event)
+	case "user.updated":
+		return c.handleUserUpdated(ctx, event)
+	case "user.deleted":
+		return c.handleUserDeleted(ctx, event)
+	case "order.placed":
+		return c.handleOrderPlaced(ctx, event)
+	case "payment.completed":
+		return c.handlePaymentCompleted(ctx, event)
+	default:
+		c.log.WithField("event_type", eventType).Warn("Unknown event type, skipping")
+		return nil
+	}
+}
+
+// Event Handlers
+// These handlers delegate to the usecase layer for business logic
+
+// handleUserCreated handles user.created events
+func (c *UserActiveMQConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.created event")
+
+	// Extract user ID from event
+	userID, ok := event["user_id"].(float64) // JSON numbers are float64
+	if !ok {
+		c.log.Warn("Invalid user_id in event")
+		return nil
+	}
+
+	// Call usecase layer to perform business logic
+	// Example: Fetch user details and send welcome email
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).WithField("user_id", userID).Error("Failed to get user from usecase")
+		return err
+	}
+
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("Successfully processed user.created event")
+
+	// TODO: Add your business logic here
+	// Example: Send welcome email, create user profile, etc.
+
+	return nil
+}
+
+// handleUserUpdated handles user.updated events
+func (c *UserActiveMQConsumer) handleUserUpdated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.updated event")
+
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Warn("Invalid user_id in event")
+		return nil
+	}
+
+	// Call usecase layer
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).WithField("user_id", userID).Error("Failed to get user from usecase")
+		return err
+	}
+
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("Successfully processed user.updated event")
+
+	// TODO: Add your business logic here
+	// Example: Update cache, sync to external systems, etc.
+
+	return nil
+}
+
+// handleUserDeleted handles user.deleted events
+func (c *UserActiveMQConsumer) handleUserDeleted(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.deleted event")
+
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Warn("Invalid user_id in event")
+		return nil
+	}
+
+	c.log.WithField("user_id", int64(userID)).Info("Successfully processed user.deleted event")
+
+	// TODO: Add your business logic here
+	// Example: Clean up user data, send notifications, etc.
+
+	return nil
+}
+
+// handleOrderPlaced handles order.placed events
+func (c *UserActiveMQConsumer) handleOrderPlaced(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling order.placed event")
+
+	orderID, ok := event["order_id"].(string)
+	if !ok {
+		c.log.Warn("Invalid order_id in event")
+		return nil
+	}
+
+	c.log.WithField("order_id", orderID).Info("Successfully processed order.placed event")
+
+	// TODO: Add your business logic here
+	// Example: Update inventory, send confirmation email, etc.
+
+	return nil
+}
+
+// handlePaymentCompleted handles payment.completed events
+func (c *UserActiveMQConsumer) handlePaymentCompleted(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling payment.completed event")
+
+	paymentID, ok := event["payment_id"].(string)
+	if !ok {
+		c.log.Warn("Invalid payment_id in event")
+		return nil
+	}
+
+	c.log.WithField("payment_id", paymentID).Info("Successfully processed payment.completed event")
+
+	// TODO: Add your business logic here
+	// Example: Update order status, trigger fulfillment, etc.
+
+	return nil
+}

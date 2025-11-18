@@ -16,7 +16,7 @@ func initRabbitMQ(d *Deps, cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to rabbitmq: %w", err)
 	}
-	d.RabbitMQ = &rabbitmq.Connection{Conn: conn}
+	d.RabbitMQ = conn
 	d.Log.Info("RabbitMQ initialized successfully")
 	return nil
 }

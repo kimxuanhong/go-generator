@@ -1,0 +1,251 @@
+package consumer
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+
+	"github.com/segmentio/kafka-go"
+	"github.com/sirupsen/logrus"
+	"{{.ModuleName}}/internal/deps"
+	"{{.ModuleName}}/internal/usecase"
+)
+
+// UserKafkaConsumer consumes User domain messages from Kafka topic (Input Adapter)
+// Follows Clean Architecture: Adapter → Usecase → Repository
+// 
+// NOTE: This is an EXAMPLE for User domain.
+// For other domains (Order, Payment, etc.), copy this file:
+//   cp user_kafka_consumer.go order_kafka_consumer.go
+// Then rename struct, inject appropriate usecase, and update handlers.
+type UserKafkaConsumer struct{
+	deps *deps.Deps
+	log  *logrus.Logger
+	// Inject domain-specific usecase
+	userUsecase *usecase.UserUsecase
+}
+
+// NewUserKafkaConsumer creates a new Kafka consumer for User domain
+// All config (brokers, topic, groupID) is loaded from deps.Kafka.Config
+func NewUserKafkaConsumer(d *deps.Deps, userUsecase *usecase.UserUsecase) *UserKafkaConsumer {
+	return &UserKafkaConsumer{
+		deps:        d,
+		log:         d.Log,
+		userUsecase: userUsecase,
+	}
+}
+
+// Run starts consuming messages from Kafka
+// Should be run as a standalone goroutine in main.go
+func (c *UserKafkaConsumer) Run() {
+	ctx := context.Background()
+	
+	c.log.Info("Starting Kafka consumer")
+
+	if c.deps.Kafka == nil {
+		c.log.Error("Kafka client not initialized")
+		return
+	}
+
+	// Create dedicated reader using all config from deps
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     c.deps.Kafka.Config.Brokers,
+		GroupID:     c.deps.Kafka.Config.GroupID,
+		Topic:       c.deps.Kafka.Config.Topic,
+		StartOffset: kafka.LastOffset,
+		MinBytes:    10e3, // 10KB
+		MaxBytes:    10e6, // 10MB
+	})
+	defer reader.Close()
+
+	c.log.WithFields(logrus.Fields{
+		"topic":    c.deps.Kafka.Config.Topic,
+		"group_id": c.deps.Kafka.Config.GroupID,
+		"brokers":  c.deps.Kafka.Config.Brokers,
+	}).Info("Connected to Kafka, waiting for messages...")
+
+	// Consume messages in infinite loop
+	for {
+		// Read message with context
+		msg, err := reader.ReadMessage(ctx)
+		if err != nil {
+			c.log.WithError(err).Error("Failed to read Kafka message")
+			time.Sleep(time.Second) // Backoff on error
+			continue
+		}
+
+		c.log.WithFields(logrus.Fields{
+			"topic":     msg.Topic,
+			"partition": msg.Partition,
+			"offset":    msg.Offset,
+			"key":       string(msg.Key),
+			"time":      msg.Time,
+		}).Debug("Received message from Kafka")
+
+		// Parse message
+		var event map[string]interface{}
+		if err := json.Unmarshal(msg.Value, &event); err != nil {
+			c.log.WithError(err).WithField("value", string(msg.Value)).Error("Failed to parse message")
+			continue // Skip invalid message (Kafka auto-commits)
+		}
+
+		// Process the event
+		if err := c.processEvent(ctx, msg.Key, event); err != nil {
+			c.log.WithError(err).WithFields(logrus.Fields{
+				"offset": msg.Offset,
+				"key":    string(msg.Key),
+			}).Error("Failed to process event")
+			// Note: Kafka auto-commits by default
+			// Implement manual commit or retry logic if needed
+			continue
+		}
+
+		c.log.WithFields(logrus.Fields{
+			"offset": msg.Offset,
+			"key":    string(msg.Key),
+		}).Info("Message processed successfully")
+	}
+}
+
+// processEvent handles the business logic for processing events
+func (c *UserKafkaConsumer) processEvent(ctx context.Context, key []byte, event map[string]interface{}) error {
+	// Add timeout for processing
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Extract event data
+	eventType, ok := event["event_type"].(string)
+	if !ok {
+		c.log.Warn("Event missing event_type field")
+		eventType = "unknown"
+	}
+
+	c.log.WithFields(logrus.Fields{
+		"event_type": eventType,
+		"key":        string(key),
+		"data":       event,
+	}).Info("Processing Kafka event")
+
+	// TODO: Implement your business logic here
+	// Example: Call usecase methods, update database, send notifications, etc.
+
+	// Simulate processing
+	time.Sleep(100 * time.Millisecond)
+
+	// Example: Handle different event types
+	switch eventType {
+	case "user.created":
+		return c.handleUserCreated(ctx, event)
+	case "user.updated":
+		return c.handleUserUpdated(ctx, event)
+	case "user.deleted":
+		return c.handleUserDeleted(ctx, event)
+	case "order.placed":
+		return c.handleOrderPlaced(ctx, event)
+	case "payment.completed":
+		return c.handlePaymentCompleted(ctx, event)
+	default:
+		c.log.WithField("event_type", eventType).Warn("Unknown event type")
+		return nil
+	}
+}
+
+// handleUserCreated processes user.created events
+func (c *UserKafkaConsumer) handleUserCreated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.created event")
+	
+	// Extract event data
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Error("Missing user_id in event")
+		return nil
+	}
+	
+	// Call usecase to get user details (Adapter → Usecase → Repository)
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).Error("Failed to get user from usecase")
+		return err
+	}
+	
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"name":    user.Name,
+	}).Info("User retrieved from usecase")
+	
+	// TODO: Implement additional business logic via usecases
+	// Example: 
+	// - Send welcome email via notification service
+	// - Create user profile in analytics service
+	// - Update recommendation engine
+	
+	return nil
+}
+
+// handleUserUpdated processes user.updated events
+func (c *UserKafkaConsumer) handleUserUpdated(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.updated event")
+	
+	// Extract event data
+	userID, ok := event["user_id"].(float64)
+	if !ok {
+		c.log.Error("Missing user_id in event")
+		return nil
+	}
+	
+	// Call usecase to get updated user (Adapter → Usecase → Repository)
+	user, err := c.userUsecase.GetUser(ctx, int64(userID))
+	if err != nil {
+		c.log.WithError(err).Error("Failed to get updated user")
+		return err
+	}
+	
+	c.log.WithFields(logrus.Fields{
+		"user_id": user.ID,
+		"email":   user.Email,
+	}).Info("Processing user update event via usecase")
+	
+	// TODO: Implement update propagation logic via usecases
+	// Example:
+	// - Update user in search index
+	// - Sync to CRM system
+	// - Invalidate cache
+	
+	return nil
+}
+
+// handleUserDeleted processes user.deleted events
+func (c *UserKafkaConsumer) handleUserDeleted(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling user.deleted event")
+	
+	// TODO: Implement user deletion logic
+	
+	return nil
+}
+
+// handleOrderPlaced processes order.placed events
+func (c *UserKafkaConsumer) handleOrderPlaced(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling order.placed event")
+	
+	// TODO: Implement order processing logic
+	// Example:
+	// - Update inventory
+	// - Send order confirmation email
+	// - Notify shipping service
+	
+	return nil
+}
+
+// handlePaymentCompleted processes payment.completed events
+func (c *UserKafkaConsumer) handlePaymentCompleted(ctx context.Context, event map[string]interface{}) error {
+	c.log.WithField("event", event).Info("Handling payment.completed event")
+	
+	// TODO: Implement payment processing logic
+	// Example:
+	// - Update order status
+	// - Send payment receipt
+	// - Trigger fulfillment process
+	
+	return nil
+}

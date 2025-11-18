@@ -29,7 +29,8 @@ func (s *GeneratorService) createBaseStructure(tmp string, includeExample bool, 
 			constants.DirInternalRepo,
 			constants.DirInternalRepoModels,
 			constants.DirInternalHandler,
-			constants.DirInternalJobs,
+			constants.DirInternalJob,      // Adapter: Scheduled jobs
+			constants.DirInternalConsumer, // Adapter: Message consumers
 		}
 		dirs = append(dirs, exampleDirs...)
 	}

@@ -8,16 +8,18 @@ import (
 
 // Config holds RabbitMQ configuration
 type Config struct {
-	URL string `json:"url"`
+	URL       string `json:"url"`
+	QueueName string `json:"queue_name"`
 }
 
 // Connection wraps amqp.Connection
 type Connection struct {
-	Conn *amqp.Connection
+	Conn   *amqp.Connection
+	Config *Config
 }
 
 // NewConnection creates a new RabbitMQ connection
-func NewConnection(cfg *Config) (*amqp.Connection, error) {
+func NewConnection(cfg *Config) (*Connection, error) {
 	if cfg == nil || cfg.URL == "" {
 		return nil, fmt.Errorf("RabbitMQ URL is required")
 	}
@@ -27,7 +29,10 @@ func NewConnection(cfg *Config) (*amqp.Connection, error) {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
 
-	return conn, nil
+	return &Connection{
+		Conn:   conn,
+		Config: cfg,
+	}, nil
 }
 
 // NewChannel creates a new RabbitMQ channel from connection

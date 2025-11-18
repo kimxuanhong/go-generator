@@ -2,6 +2,7 @@
   "activemq": {
     "addr": "localhost:61613",
     "login": "",
-    "passcode": ""
+    "passcode": "",
+    "queue_name": "/queue/user-events"
   }
 }
