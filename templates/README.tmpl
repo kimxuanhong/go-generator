@@ -17,15 +17,25 @@ A Go project generated using the Go Project Generator with clean architecture pr
 │   │   ├── deps.go               # Dependency container
 │   │   └── config.go             # Configuration loading
 {{- if .IncludeExample}}
-│   ├── domain/                   # Domain entities
+│   ├── domain/                   # Domain entities (pure business models)
 │   │   └── entity.go             # Business models
 │   ├── usecase/                  # Business logic
 │   │   └── user_usecase.go       # User use cases
-│   ├── repository/               # Data access
-│   │   ├── user_repository.go    # User data operations
-│   │   └── cache_repository.go   # Cache operations
-│   ├── handler/                  # HTTP handlers
-│   │   └── user_handler.go       # User HTTP endpoints
+│   ├── adapter/
+│   │   └── handler/              # HTTP handlers
+│   │       └── user_handler.go   # User HTTP endpoints
+│   ├── infrastructure/           # Infrastructure layer
+│   │   └── repository/           # Data access implementations
+│   │       ├── user_repository.go    # User data operations
+│   │       ├── cache_repository.go   # Cache operations
+│   │       └── models/           # Database models (GORM)
+│   │           └── user_model.go # DB-specific user model
+│   ├── errors/                   # Custom error handling
+│   │   └── errors.go             # AppError system
+│   ├── middleware/               # HTTP middleware
+│   │   ├── logging.go            # Request/response logging
+│   │   ├── tracing.go            # Distributed tracing
+│   │   └── ratelimit.go          # Rate limiting
 {{- if index .Includes "cron"}}
 │   └── jobs/                     # Background jobs
 │       └── example_job.go        # Example cron job
@@ -84,6 +94,11 @@ A Go project generated using the Go Project Generator with clean architecture pr
 ## Prerequisites
 
 - Go 1.20+
+
+**Built-in features** (no additional setup required):
+- 🔧 **Viper**: Configuration management with auto env binding
+- 📝 **Logrus**: Structured JSON logging across all layers
+- ⚡ **Middleware**: Logging, tracing, and rate limiting
 {{- if index .Includes "postgres"}}
 - PostgreSQL
 {{- end}}
@@ -115,27 +130,49 @@ go mod download
 go mod tidy
 ```
 
-### 2. Configuration
+### 2. Configuration (Viper)
 
-Copy `.env.example` to `.env` and update with your values:
+This project uses **Viper** for configuration management with automatic environment variable binding.
+
+**Setup configuration:**
 
 ```bash
+# 1. Copy environment template
 cp .env.example .env
+
+# 2. Edit .env with your values
+nano .env
+
+# 3. Edit config/config.json for defaults (optional)
+nano config/config.json
 ```
 
-Edit `config/config.json` for default values. Environment variables will override config file values.
+**How Viper loads config:**
+1. Reads `config/config.json` for base configuration
+2. Automatically binds environment variables (nested keys: `redis.addr` → `REDIS_ADDR`)
+3. ENV variables override config file values
+4. Applies code-level defaults for missing values
 
-### Swagger Documentation
+### 3. Generate Swagger Documentation
 
-This project includes Swagger annotations and a placeholder spec in `docs/`. After updating handlers or adding new routes, regenerate the documentation:
+This project includes Swagger/OpenAPI annotations in handler methods. Generate the documentation:
 
 ```bash
+# Install swag CLI tool (first time only)
 go install github.com/swaggo/swag/cmd/swag@latest
+
+# Generate Swagger docs
 swag init -g cmd/main.go -o docs
 ```
 
+After starting the server, access Swagger UI at:
+- **Swagger UI**: `http://localhost:8080/swagger/index.html`
+- **OpenAPI JSON**: `http://localhost:8080/swagger/doc.json`
+
+> **Note**: Re-run `swag init` after modifying handler annotations or adding new endpoints.
+
 {{- if or (index .Includes "postgres") (index .Includes "mysql") (index .Includes "redis") (index .Includes "rabbitmq")}}
-### 3. Start Services (Docker Compose)
+### 4. Start Services (Docker Compose)
 
 Create a `docker-compose.yml`:
 
@@ -255,16 +292,24 @@ go run cmd/main.go
 
 The server will start on the configured port (default: 8080).
 
-### With Custom Configuration
+### With Custom Configuration (Viper)
+
+Viper automatically loads `config/config.json` and applies environment variable overrides:
 
 ```bash
-# Using environment variables
-ECHO_PORT=3000 POSTGRES_DSN="your-dsn" go run cmd/main.go
+# Method 1: Direct environment variables
+LOG_LEVEL=debug ECHO_PORT=3000 go run cmd/main.go
 
-# Or set in .env file and source it
-source .env
-go run cmd/main.go
+# Method 2: Source .env file (Viper compatible)
+source .env && go run cmd/main.go
+
+# Method 3: Use direnv or similar tools
+# .envrc
+export LOG_LEVEL=debug
+export ECHO_PORT=3000
 ```
+
+**Priority order**: `ENV variables` → `config.json` → `code defaults`
 
 ### Build for Production
 
@@ -298,6 +343,22 @@ docker run -d \
 
 {{- if .IncludeExample}}
 
+### Interactive API Documentation (Swagger)
+
+Access the interactive Swagger UI to explore and test all API endpoints:
+
+```
+http://localhost:8080/swagger/index.html
+```
+
+Swagger UI provides:
+- 📋 Complete API documentation
+- 🧪 Interactive testing interface
+- 📝 Request/response examples
+- ✅ Request validation
+
+> **Tip**: Use Swagger UI to test endpoints without writing curl commands!
+
 ### Health Check
 
 ```bash
@@ -330,14 +391,46 @@ Response:
 
 ## Configuration
 
-Configuration is loaded from `config/config.json` and can be overridden by environment variables.
+This project uses **Viper** (built-in) for powerful configuration management with automatic environment variable binding.
+
+### Configuration Management (Built-in - Viper)
+
+Viper provides:
+- 📁 **Multiple formats**: JSON, YAML, TOML, ENV files (default: JSON)
+- 🔄 **Auto env binding**: Nested config keys automatically map to environment variables
+- 🎯 **Type-safe**: Strong typing with struct unmarshaling
+- 🔀 **Priority order**: ENV vars override config file values
+
+**How it works:**
+
+```go
+// Config structure
+type Config struct {
+    Log *LogConfig `json:"log" mapstructure:"log"`
+    Echo *EchoConfig `json:"echo" mapstructure:"echo"`
+    Redis *RedisConfig `json:"redis" mapstructure:"redis"`
+}
+
+// Loaded from: config/config.json
+// Override with ENV: LOG_LEVEL, ECHO_PORT, REDIS_ADDR
+```
+
+**Key mapping:**
+- Nested keys use dot notation in JSON: `redis.addr`
+- Automatically converted to ENV format: `REDIS_ADDR`
+- Case-insensitive matching
 
 ### Environment Variables
 
 See `.env.example` for all available configuration options.
 
-Common variables:
-- `{{if eq .Framework "echo"}}ECHO_HOST`, `ECHO_PORT{{else if eq .Framework "gin"}}GIN_HOST`, `GIN_PORT`, `GIN_MODE{{else if eq .Framework "fiber"}}FIBER_HOST`, `FIBER_PORT{{end}}`
+**Common variables:**
+
+Framework:
+- `{{if eq .Framework "echo"}}ECHO_HOST`, `ECHO_PORT`, `ECHO_DEBUG{{else if eq .Framework "gin"}}GIN_HOST`, `GIN_PORT`, `GIN_MODE{{else if eq .Framework "fiber"}}FIBER_HOST`, `FIBER_PORT{{end}}`
+
+Logging (built-in):
+- `LOG_LEVEL` - Logging level (debug, info, warn, error) - default: `info`
 {{- if index .Includes "postgres"}}
 - `POSTGRES_DSN` - PostgreSQL connection string
 {{- end}}
@@ -360,57 +453,259 @@ Common variables:
 - `OPENTELEMETRY_SERVICENAME`, `OPENTELEMETRY_ENDPOINT`, `OPENTELEMETRY_INSECURE`, `OPENTELEMETRY_SAMPLERATIO`
 {{- end}}
 
-> **Tip:** Nested keys from `config/config.json` are automatically mapped to environment variables by converting dots to underscores (e.g. `redis.addr` → `REDIS_ADDR`).
+**Configuration examples:**
+
+```bash
+# config/config.json
+{
+  "log": {"level": "info"},
+  "echo": {"host": "0.0.0.0", "port": 8080},
+  "redis": {"addr": "localhost:6379"}
+}
+
+# Override via environment variables
+export LOG_LEVEL=debug
+export ECHO_PORT=3000
+export REDIS_ADDR=redis-server:6379
+
+# Viper automatically applies ENV overrides
+# Priority: ENV vars > config file > defaults
+```
+
+> **Tip:** All nested keys from `config/config.json` are automatically mapped to environment variables by converting dots to underscores (e.g. `redis.addr` → `REDIS_ADDR`). Viper handles this conversion seamlessly!
 
 ## Architecture
 
-This project follows **Clean Architecture** principles:
+This project follows **Clean Architecture** principles with proper separation of concerns:
 
-- **Domain**: Business logic and entities
+### Layers
+
+- **Domain**: Pure business entities (no external dependencies, no GORM tags)
 - **Usecase**: Application-specific business rules
-- **Repository**: Data access abstraction
-- **Handler**: HTTP request/response handling
-- **Infrastructure**: External service integrations
+- **Adapter/Handler**: HTTP request/response handling, DTOs with validation
+- **Infrastructure/Repository**: Data access implementations, database models
+- **Errors**: Custom structured error handling with `AppError`
+- **Middleware**: Cross-cutting concerns (logging, tracing, rate limiting)
 
 ### Dependency Flow
 
 ```
-HTTP Request → Handler → Usecase → Repository → Database
-                           ↓
-                       (Business Logic)
+HTTP Request → Middleware → Handler (DTO validation)
+                              ↓
+                          Usecase (business logic)
+                              ↓
+                          Repository (data access)
+                              ↓
+                          Database
+```
+
+### Key Design Patterns
+
+1. **DTO Pattern**: Request/Response DTOs in handler layer, separate from domain entities
+2. **Repository Pattern**: Abstracts data access with models layer for GORM entities
+3. **Dependency Injection**: All dependencies injected via constructors
+4. **Context Propagation**: `context.Context` passed through all layers for cancellation, timeouts, and tracing
+
+## Logging (Built-in)
+
+This project includes **structured logging** with Logrus across all layers:
+
+### Log Levels
+- **DEBUG**: Detailed information for debugging (cache operations, detailed flow)
+- **INFO**: General informational messages (user created, operation completed)
+- **WARN**: Warning messages (not found, validation errors)
+- **ERROR**: Error messages (database failures, external API errors)
+
+### Configuration
+
+Set log level via environment variable or config:
+
+```bash
+LOG_LEVEL=debug go run cmd/main.go
+```
+
+Or in `config/config.json`:
+```json
+{
+  "log": {
+    "level": "info"
+  }
+}
+```
+
+### Log Format
+
+Logs are output in JSON format for easy parsing:
+
+```json
+{
+  "level": "info",
+  "msg": "User retrieved successfully",
+  "user_id": 123,
+  "email": "john@example.com",
+  "time": "2025-11-18T10:30:00+07:00"
+}
+```
+
+### Logging in Each Layer
+
+**Handler Layer** - HTTP request/response logging:
+```go
+h.log.WithField("user_id", id).Info("Fetching user")
+```
+
+**Usecase Layer** - Business logic logging:
+```go
+u.log.WithFields(logrus.Fields{
+    "email": user.Email,
+    "name":  user.Name,
+}).Info("Creating new user")
+```
+
+**Repository Layer** - Data access logging:
+```go
+r.log.WithField("user_id", id).Debug("Fetching user from database")
 ```
 
 ## Development
 
 ### Adding a New Endpoint
 
-1. Add a method to `internal/adapter/handler/user_handler.go`
-2. Register the route in `internal/app/routes.go`
-3. Implement logic in `internal/usecase/user_usecase.go`
-4. Access data via `internal/infrastructure/repository/user_repository.go`
-5. Define database models in `internal/infrastructure/repository/models/`
-
-Example:
-
+1. **Define DTO** in `internal/adapter/handler/user_handler.go` with validation tags:
 ```go
-// In user_handler.go
+type CreateUserRequest struct {
+    Name  string `json:"name" validate:"required,min=2,max=100"`
+    Email string `json:"email" validate:"required,email"`
+}
+```
+
+2. **Add Handler Method** with logging and error handling:
+```go
 func (h *UserHandler) CreateUser(c echo.Context) error {
+    h.log.Info("Creating user")
+    
     var req CreateUserRequest
-    if err := c.BindJSON(&req); err != nil {
+    if err := c.Bind(&req); err != nil {
+        h.log.WithError(err).Warn("Invalid request format")
         return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
     }
     
-    user, err := h.userUsecase.CreateUser(req.Name, req.Email)
-    if err != nil {
+    // Validate using go-playground/validator
+    if err := h.validator.Struct(&req); err != nil {
+        h.log.WithError(err).Warn("Validation failed")
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+    }
+    
+    // Convert DTO to domain entity
+    user := req.ToUser()
+    
+    // Call usecase
+    if err := h.userUsecase.CreateUser(c.Request().Context(), user); err != nil {
+        h.log.WithError(err).Error("Failed to create user")
         return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
     }
     
+    h.log.WithField("user_id", user.ID).Info("User created successfully")
     return c.JSON(http.StatusCreated, user)
 }
+```
 
-// In routes.go
+3. **Register Route** in `internal/app/routes.go`:
+```go
 api.POST("/users", userHandler.CreateUser)
 ```
+
+4. **Implement Business Logic** in `internal/usecase/user_usecase.go`:
+```go
+func (u *UserUsecase) CreateUser(ctx context.Context, user *domain.User) error {
+    u.log.WithField("email", user.Email).Info("Creating user")
+    return u.userRepo.Create(ctx, user)
+}
+```
+
+5. **Define Database Model** in `internal/infrastructure/repository/models/user_model.go`:
+```go
+type UserModel struct {
+    ID    int64  `gorm:"primaryKey"`
+    Name  string `gorm:"type:varchar(255);not null"`
+    Email string `gorm:"uniqueIndex;not null"`
+}
+
+func (m *UserModel) TableName() string {
+    return "users"
+}
+```
+
+6. **Implement Repository** in `internal/infrastructure/repository/user_repository.go`:
+```go
+func (r *UserRepositoryImpl) Create(ctx context.Context, user *domain.User) error {
+    r.log.WithField("email", user.Email).Debug("Creating user in database")
+    
+    model := models.FromDomain(user)
+    if err := r.getDB().WithContext(ctx).Create(model).Error; err != nil {
+        r.log.WithError(err).Error("Failed to create user")
+        return err
+    }
+    
+    user.ID = model.ID
+    r.log.WithField("user_id", user.ID).Info("User created in database")
+    return nil
+}
+```
+
+### Error Handling with AppError
+
+Use the custom `AppError` system for structured error handling:
+
+```go
+import "{{.ModuleName}}/internal/errors"
+
+// Not found error
+return errors.NotFound("User").WithContext("user_id", id)
+
+// Validation error
+return errors.ValidationError("Invalid email format")
+
+// Database error
+return errors.Database("INSERT user", err).WithContext("email", user.Email)
+
+// Internal error with wrapped error
+return errors.Internal("Failed to process user", err)
+```
+
+### Updating Swagger Documentation
+
+After adding or modifying handlers, regenerate Swagger docs:
+
+```bash
+# Regenerate Swagger documentation
+swag init -g cmd/main.go -o docs
+
+# Restart the server to see changes
+go run cmd/main.go
+```
+
+**Adding Swagger Annotations to Handlers:**
+
+```go
+// GetUser godoc
+// @Summary Retrieve user by ID
+// @Description Returns user information for the provided identifier
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} UserResponse
+// @Failure 400 {object} ErrorResponse "Invalid ID format"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Router /api/v1/users/{id} [get]
+func (h *UserHandler) GetUser(c echo.Context) error {
+    // handler implementation
+}
+```
+
+Access the interactive API documentation at `http://localhost:8080/swagger/index.html`
 
 {{- if index .Includes "rabbitmq"}}
 ### Using RabbitMQ
@@ -522,7 +817,57 @@ With coverage:
 go test -cover ./...
 ```
 
+## Observability
+
+{{- if index .Includes "opentelemetry"}}
+### Distributed Tracing
+
+This project uses OpenTelemetry for distributed tracing:
+
+- Traces are propagated through all layers via `context.Context`
+- Each layer creates spans: `handler.GetUser`, `usecase.GetUser`, `repository.GetByID`
+- Errors are recorded in spans for better debugging
+
+Configure via environment variables:
+```bash
+OPENTELEMETRY_ENDPOINT=http://localhost:4318
+OPENTELEMETRY_SERVICENAME={{.ProjectName}}
+OPENTELEMETRY_SAMPLERATIO=1.0
+```
+{{- end}}
+
+### Structured Logging
+
+All layers include structured logging with contextual information:
+
+```bash
+# View logs in JSON format
+go run cmd/main.go | jq
+
+# Filter by log level
+go run cmd/main.go | jq 'select(.level=="error")'
+
+# Filter by user_id
+go run cmd/main.go | jq 'select(.user_id==123)'
+```
+
+### Middleware
+
+Built-in middleware for production-ready applications:
+
+1. **Logging Middleware**: Logs all HTTP requests/responses with duration
+2. **Tracing Middleware**: Creates spans for each HTTP request{{- if index .Includes "opentelemetry"}} (OpenTelemetry){{- end}}
+3. **Rate Limiting**: Prevents abuse with configurable limits (10 req/sec default)
+
 ## Troubleshooting
+
+### Enable Debug Logging
+
+For detailed logs during development:
+
+```bash
+LOG_LEVEL=debug go run cmd/main.go
+```
 
 ### Port Already in Use
 
@@ -540,7 +885,7 @@ FIBER_PORT=9000 go run cmd/main.go
 
 ### Database Connection Error
 
-Check your connection string in `config/config.json` or set via env var.
+Check your connection string in `config/config.json` or set via env var. Enable debug logging to see detailed connection attempts.
 
 ### RabbitMQ Connection Error
 
@@ -548,6 +893,21 @@ Ensure RabbitMQ is running and the URL is correct:
 
 ```bash
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/ go run cmd/main.go
+```
+
+### Viewing Structured Logs
+
+Use `jq` to parse JSON logs:
+
+```bash
+# Pretty print
+go run cmd/main.go | jq
+
+# Show only errors
+go run cmd/main.go | jq 'select(.level=="error")'
+
+# Follow logs with grep
+go run cmd/main.go 2>&1 | grep "User created"
 ```
 
 ## License
